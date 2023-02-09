@@ -38,5 +38,6 @@ Having a function for every voltage below is a general idea of how the probabili
 By taking the one state stransition model i.e (state I), Markov decision process is applyed to determine the next state for a given applied voltage. it returns next state with the probablity.
 
 ![a)State transition diagram from state I](Data/im1.jpg){hight=200 width=200}
+<img src="https://github.com/MeklitWoldeamlak/eee4_project/blob/master/Data/im1.jpg"  width=50% height=50%>
 ![b) probability of transition from state I](Data/im2.jpg){hight=200 width=200}
 ![Given that we have a number of actions in a list(a1,a2, a3,…)  the transition diagram can also look like this ](Data/im3.jpg){hight=200 width=200}
