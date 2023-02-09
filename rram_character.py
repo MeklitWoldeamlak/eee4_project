@@ -16,6 +16,7 @@ class Arc2Tester(ABC):
     def run(self, hardware: arc2.Arc2HardwareSimulator) -> list:
         """Run test on hardware"""
         _report = []
+        _transition_record= np.array(np.zeros([3,4,20]))
         while True:
             # get current state of device from the hardware
             _current_state = 0 
@@ -30,6 +31,8 @@ class Arc2Tester(ABC):
             for _ in range(_pulse_duration):
                 hardware.apply_voltage(_voltage)
             _new_state = hardware.get_current_device_state()
+            _action_index =  int((_voltage+5)/0.5)
+            _transition_record[_current_state][_new_state][_action_index]+=1
             _report.append(
                 {
                     'current_state': arc2.STATES[_current_state],
@@ -40,9 +43,11 @@ class Arc2Tester(ABC):
                     'to state III': _new_state == 2,
                     'voltage_applied': _voltage,
                     'voltage_pulse': _pulse_duration,
-                    'success': _target_state == _new_state
+                    'success': _target_state == _new_state,
+                    'table': _transition_record
                 }
             )
+           
             # check to see if we have finished the wafer
             if not hardware.move_to_next_device():
                 break
@@ -103,6 +108,7 @@ def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
     plt.show()
 
 
+
 def main(args):
     """Simulate a test module applying voltages to a number of devices in a wafer"""
     _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices)
@@ -134,6 +140,8 @@ def main(args):
     #print("Voltage : ", [d['voltage_applied'] for d in _report])
     print("Successful electroform: ", _successful_electroform)
     print("Failed devices: ", _failed_devices)
+    table= [d['table'] for d in _report]
+    print(table[-1])
 
 
 def parser_setup(parser):
