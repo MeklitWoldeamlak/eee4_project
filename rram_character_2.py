@@ -9,7 +9,8 @@ import arc2_simulator as arc2
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_ALGORITHM = "random"
-
+GAMMA = 0.7 #discount factor
+ALPHA = 0.9 #learning factor
 
 class Arc2Tester(ABC):
     """This is the deliverable"""
