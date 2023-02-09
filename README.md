@@ -32,8 +32,9 @@ Having a function for every voltage below is a general idea of how the probabili
 5. Applying no voltage(0V) to the device results in no change in the device
 6. The chances of a device failing increases with voltage
 7. The probability transitions are modelled to follow a gaussian distribution except the transition to a failed state or when it is remaining in the same state
-    a. transition to a Fail state is modelled to follow symmetric normal distribution or symmetric sigmoid function
-    b. The probablity of remaining in the same state is modelled to so that it has higher value around zero and decreseas as we gp further away. The probablity will be 1 - sum(all other probablity transitioms)
+
+    - transition to a Fail state is modelled to follow symmetric normal distribution or symmetric sigmoid function
+    - The probablity of remaining in the same state is modelled to so that it has higher value around zero and decreseas as we gp further away. The probablity will be 1 - sum(all other probablity transitioms)
 8. The Vmax is set to 5V and Vmin is -5V. Applying a voltage ranging between these two value is resonable enough for electroforming 
 
 #### MDP: 
