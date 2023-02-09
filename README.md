@@ -22,4 +22,4 @@ Consists of all state transition models. Makes use of gaussian probablity distri
 #### MDP: 
 By taking the one state stransition model i.e (state I), Markov decision process is applyed to determine the next state for a given applied voltage. it returns next state with the probablity.
 
-![alt text for screen readers](Data/im1.png "T")
+![alt text for screen readers](Data/im1.jpg "T")
