@@ -4,7 +4,7 @@ import logging
 import random
 from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
-import arc2_simulator as arc2
+import arc2_simulator2 as arc2
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
@@ -142,7 +142,7 @@ def main(args):
     print("Successful electroform: ", _successful_electroform)
     print("Failed devices: ", _failed_devices)
     table= [d['table'] for d in _report]
-    print(table[-1])
+    #print(table[-1])
 
 
 def parser_setup(parser):

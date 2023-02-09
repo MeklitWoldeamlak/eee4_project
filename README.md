@@ -25,13 +25,15 @@ Having a function for every voltage below is a general idea of how the probabili
 
 #### Assumptions 
 
-1. The electroforming probabilities characteristics in real hardware does not change over time on a single device  
+1. The electroforming probabilities characteristics in real hardware does not change over time on a single device/ This can be also from device to device in a wafer  
 2. The electroforming probabilities characteristics will change with the physical series resistor
 3. To go to higher resistance state requires a positive voltage
 4. To go to lower resistance state requires a negative voltage
 5. Applying no voltage(0V) to the device results in no change in the device
 6. The chances of a device failing increases with voltage
 7. The probability transitions are modelled to follow a gaussian distribution except the transition to a failed state or when it is remaining in the same state
+    a. transition to a Fail state is modelled to follow symmetric normal distribution or symmetric sigmoid function
+    b. The probablity of remaining in the same state is modelled to so that it has higher value around zero and decreseas as we gp further away. The probablity will be 1 - sum(all other probablity transitioms)
 8. The Vmax is set to 5V and Vmin is -5V. Applying a voltage ranging between these two value is resonable enough for electroforming 
 
 #### MDP: 
