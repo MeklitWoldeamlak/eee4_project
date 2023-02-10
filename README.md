@@ -36,7 +36,7 @@ b) probability of transition from state I
 Given that we have a number of actions in a list(a1,a2, a3,…)  the transition diagram can also look like this
 
 #### Variables Involved  
-<img src="https://github.com/MeklitWoldeamlak/eee4_project/blob/master/Data/im.jpg"  width=40% height=40%>
+<img src="https://github.com/MeklitWoldeamlak/eee4_project/blob/master/Data/im.png"  width=40% height=40%>
 
 #### Software file
 •	The main () function and algorithm is included
