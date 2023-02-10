@@ -39,16 +39,16 @@ Given that we have a number of actions in a list(a1,a2, a3,…)  the transition 
 <img src="https://github.com/MeklitWoldeamlak/eee4_project/blob/master/Data/im.png"  width=40% height=40%>
 
 #### Software file
-•	The main () function and algorithm is included
-•	Used a simple interface just like with the real hardware (Needs to be compatible with the real interface
-•	Make sure  we don’t use info that is not available to us with the hardware
-•	It doesn’t know what version of the model is being used in the hardware
+- The main () function and algorithm is included
+- Used a simple interface just like with the real hardware (Needs to be compatible with the real interface
+- Make sure  we don’t use info that is not available to us with the hardware
+- It doesn’t know what version of the model is being used in the hardware
 
 #### Hardware file
-•	Represents the actual FPGA(Arc2 system in our case)
-•	Software version of the hardware which has the same constraints and behave in similar way
-•	Only talk to it via the functions like apply_voltage ( )
-•	It’s characteristics functions can’t be accessed 
+- Represents the actual FPGA(Arc2 system in our case)
+- Software version of the hardware which has the same constraints and behave in similar way
+- Only talk to it via the functions like apply_voltage ( )
+- It’s characteristics functions can’t be accessed 
 
 #### Process
 - After writing algorithm against the hardware file, run algorithm over many iteration/ devices and get a result
