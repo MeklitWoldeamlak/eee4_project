@@ -20,12 +20,12 @@ class Arc2Tester(ABC):
         _transition_record= np.array(np.zeros([3,4,20]))
         while True:
             # get current state of device from the hardware
-            _current_state = 0 
+            _current_state = hardware.get_current_device_state()
             # select the state we want this to be, random but could be read from file
             # and don't choose the current state
             _possible_target_states = set(range(arc2.NUM_NON_FAIL_STATES))
             _possible_target_states.remove(_current_state)
-            _target_state = 2#random.choice(list(_possible_target_states))
+            _target_state = random.choice(list(_possible_target_states))
             # determine the voltage to apply
             _voltage, _pulse_duration = self.get_action(_current_state,_target_state)
             # apply to hardware a number of times representing pulse length

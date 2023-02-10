@@ -37,6 +37,16 @@ Having a function for every voltage below is a general idea of how the probabili
     - The probablity of remaining in the same state is modelled to so that it has higher value around zero and decreseas as we gp further away. The probablity will be 1 - sum(all other probablity transitioms)
 8. The Vmax is set to 5V and Vmin is -5V. Applying a voltage ranging between these two value is resonable enough for electroforming 
 
+#### Update on Assumptions (Feb 09)
+
+1. Revisit later in the future as we discover more data but for now stick with the assumption
+2.  Assume there is no need for inclusion of series resistor. The electroforming probabilities characteristics will not depend on the series resistor. Add the capability later on   
+9. Assuming model is fully observable (possible to read state after each action), we can apply series of voltage(action) after first action. ie there are no hidden state
+10. We assume the model follows stationary state: the transition probabilities will remain the same and it does not change based on history. For example, looking at transitions
+ I II and I -> I II, the transition probabilities (bold arrow) will be the same.
+
+##### Question on the initial state, is there a specific state that all devices begin with before electroforming? Or they are all random?
+
 #### MDP: 
 By taking the one state stransition model i.e (state I), Markov decision process is applyed to determine the next state for a given applied voltage. it returns next state with the probablity.
 
