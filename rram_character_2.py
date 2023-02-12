@@ -8,6 +8,7 @@ import arc2_simulator2 as arc2
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
+DEFAULT_NUMBER_WAFERS = 2
 DEFAULT_ALGORITHM = "random"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
@@ -111,38 +112,48 @@ def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
 
 
 def main(args):
-    """Simulate a test module applying voltages to a number of devices in a wafer"""
-    _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices)
-    if args.algorithm_to_use == "random":
-        _arc_tester = RandomVoltageArc2Tester()
-    elif args.algorithm_to_use == "expuser":
-        _arc_tester = ExperiencedUserTester()
-    else:
-        raise RuntimeError("Unknown algorithm!")
-    if args.plot_hardware_dist:
-        plot_hardware_distribution(_arc2_hardware)
-    _report = _arc_tester.run(_arc2_hardware)
-    _successful_electroform = sum([d['success'] for d in _report])
-    _state_I = sum([d['to state I'] for d in _report])
-    _state_II = sum([d['to state II'] for d in _report])
-    _failed_devices = sum([d['actual_state']=="FAIL" for d in _report])
-   # _target=[d['target_state'] for d in _report]
-   # _current=[d['current_state'] for d in _report]
-   # _new=[d['actual_state'] for d in _report]
     
-    if args.list_states:
-        print("Num of devices in state I : ", _state_I)
-        print("Num of devices in state II : ", _state_II)
-    
-    print("Devices in wafer: ", args.number_devices)
-    print("Devices tested: ", len(_report))
-    #print("State of Devices : ", _current)
-    #print(" New State of Devices : ", _new)
-    #print("Voltage : ", [d['voltage_applied'] for d in _report])
-    print("Successful electroform: ", _successful_electroform)
-    print("Failed devices: ", _failed_devices)
-    table= [d['table'] for d in _report]
-    #print(table[-1])
+    "Use a loop to run number of times representing running your algorithm on many wafers"
+    _stat_report=[]
+    for i in range (args.number_wafers):
+        """Simulate a test module applying voltages to a number of devices in a wafer"""
+        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices)
+        if args.algorithm_to_use == "random":
+            _arc_tester = RandomVoltageArc2Tester()
+        elif args.algorithm_to_use == "expuser":
+            _arc_tester = ExperiencedUserTester()
+        else:
+            raise RuntimeError("Unknown algorithm!")
+        if args.plot_hardware_dist:
+            plot_hardware_distribution(_arc2_hardware)
+        _report = _arc_tester.run(_arc2_hardware)
+        _successful_electroform = sum([d['success'] for d in _report])
+        _state_I = sum([d['to state I'] for d in _report])
+        _state_II = sum([d['to state II'] for d in _report])
+        _failed_devices = sum([d['actual_state']=="FAIL" for d in _report])
+    # _target=[d['target_state'] for d in _report]
+    # _current=[d['current_state'] for d in _report]
+    # _new=[d['actual_state'] for d in _report]
+        
+        if args.list_states:
+            print("Num of devices in state I : ", _state_I)
+            print("Num of devices in state II : ", _state_II)
+        
+        print("Devices in wafer: ", args.number_devices)
+        print("Devices tested: ", len(_report))
+        #print("State of Devices : ", _current)
+        #print(" New State of Devices : ", _new)
+        #print("Voltage : ", [d['voltage_applied'] for d in _report])
+        print("Successful electroform in wafer number ",i+1,'is' ,_successful_electroform)
+        print("Failed devices in wafer number ",i+1,'is', _failed_devices)
+        print("The First Pass Yield(FPY) in wafer number  ",i+1,'is', 100*(_successful_electroform/ args.number_devices),'% \n')
+        table= [d['table'] for d in _report]
+        #print(table[-1])
+        
+        _stat_report.append(_successful_electroform)
+    _mean= np.mean(_stat_report)   
+    _std= np.std(_stat_report) 
+    print('The average  and standard deviation of Successful electroform in a number of wafer are ',_mean,'and',  _std ,'respectively')
 
 
 def parser_setup(parser):
@@ -161,6 +172,13 @@ def parser_setup(parser):
         action="store",
         type=int,
         default=DEFAULT_NUMBER_DEVICES
+    )
+    group_input.add_argument(
+        "-w", "--number-wafers",
+        help="Number of wafer.",
+        action="store",
+        type=int,
+        default= DEFAULT_NUMBER_WAFERS
     )
 
     group_output = parser.add_argument_group("output options")
