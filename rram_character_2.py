@@ -9,13 +9,14 @@ import arc2_simulator2 as arc2
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 2
+DEFAULT_MAX_ATTEMPT =10
 DEFAULT_ALGORITHM = "random"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
 class Arc2Tester(ABC):
     """This is the deliverable"""
-    def run(self, hardware: arc2.Arc2HardwareSimulator) -> list:
+    def run(self,hardware: arc2.Arc2HardwareSimulator) -> list:
         """Run test on hardware"""
         _report = []
         _transition_record= np.array(np.zeros([3,4,20]))
@@ -28,13 +29,19 @@ class Arc2Tester(ABC):
             _possible_target_states.remove(_current_state)
             _target_state = random.choice(list(_possible_target_states))
             # determine the voltage to apply
-            _voltage, _pulse_duration = self.get_action(_current_state,_target_state)
-            # apply to hardware a number of times representing pulse length
-            for _ in range(_pulse_duration):
-                hardware.apply_voltage(_voltage)
-            _new_state = hardware.get_current_device_state()
-            _action_index =  int((_voltage+5)/0.5)
-            _transition_record[_current_state][_new_state][_action_index]+=1
+            for i in range(args.max_attempts):
+            
+                _voltage, _pulse_duration = self.get_action(_current_state,_target_state)
+                # apply to hardware a number of times representing pulse length
+                for _ in range(_pulse_duration):
+                    hardware.apply_voltage(_voltage)
+                _new_state = hardware.get_current_device_state()
+                if _new_state ==_target_state or arc2.STATES[_new_state]=="FAIL":
+                    break
+                _current_state=_new_state
+                
+            #_action_index =  int((_voltage+5)/0.5)
+            #_transition_record[_current_state][_new_state][_action_index]+=1
             _report.append(
                 {
                     'current_state': arc2.STATES[_current_state],
@@ -179,6 +186,13 @@ def parser_setup(parser):
         action="store",
         type=int,
         default= DEFAULT_NUMBER_WAFERS
+    )
+    group_input.add_argument(
+        "-m", "--max-attempts",
+        help="Maxiumum number of time steps to perform on a single device.",
+        action="store",
+        type=int,
+        default= DEFAULT_MAX_ATTEMPT
     )
 
     group_output = parser.add_argument_group("output options")
