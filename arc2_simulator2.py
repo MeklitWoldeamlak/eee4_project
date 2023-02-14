@@ -19,16 +19,16 @@ B= 6.5
 _DEVICE_FAIL_DEVIATION = 1.0
 _NON_FAIL_STATE_TPS_PARAMS = [
         [
-            {'mean': 2.0, 'stdev': 0.75},    # I to II
-            {'mean': 4.0, 'stdev': 0.75}     # I to III
+            {'mean': 2.0, 'stdev': 0.5},    # I to II
+            {'mean': 4.0, 'stdev': 0.5}     # I to III
         ],
         [
             {'mean': -3.0, 'stdev': 1.0},   # II to I
             {'mean':  3.0, 'stdev': 1.0}    # II to III
         ],
         [
-            {'mean': -4.0, 'stdev': 0.75},   # III to I
-            {'mean': -2.0, 'stdev': 0.75}    # III to II
+            {'mean': -4.0, 'stdev': 0.5},   # III to I
+            {'mean': -2.0, 'stdev': 0.5}    # III to II
         ]
     ]
 
@@ -56,11 +56,11 @@ def _symmetric_sigmoid_dist(prob: np.float32, a: np.float32, b: np.float32):
 def _transition_probability(current_state: int, model_params: list):
     if len(model_params) != 2:
         raise RuntimeError("Invalid configuration!")
-    prob=1.2
-    if current_state==1:
-        prob=1.5
-    _prob_functions = [_normal_dist(prob,params['mean'],params['stdev']) for params in model_params]
-    _prob_functions.append(_symmetric_sigmoid_dist(0.5,A,B))
+    #prob=1.2
+    #if current_state==1:
+      #  prob=1.5
+    _prob_functions = [_normal_dist(1,params['mean'],params['stdev']) for params in model_params]
+    _prob_functions.append(_symmetic_normal_dist(0.5,MAX_VOLTAGE,_DEVICE_FAIL_DEVIATION))
     def _transition(voltage) -> np.array:
         _probabilities = np.array([f(voltage) for f in _prob_functions])
         _sum_prob = np.sum(_probabilities)

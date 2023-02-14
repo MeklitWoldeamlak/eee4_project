@@ -9,9 +9,9 @@ import arc2_simulator2 as arc2
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 2
-DEFAULT_MAX_ATTEMPT =10
+DEFAULT_MAX_ATTEMPT =2
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "random"
+DEFAULT_ALGORITHM = "epsilon"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -21,8 +21,10 @@ class Arc2Tester(ABC):
     def run(self,hardware: arc2.Arc2HardwareSimulator) -> list:
         """Run test on hardware"""
         _report = []
+        _time_record=[]
         _transition_record= np.array(np.zeros([3,4,20]))
         while True:
+            n=0 #time step
             # get current state of device from the hardware
             _current_state = hardware.get_current_device_state()
             # select the state we want this to be, random but could be read from file
@@ -32,6 +34,7 @@ class Arc2Tester(ABC):
             _target_state = random.choice(list(_possible_target_states))
             # determine the voltage to apply
             for i in range(args.max_attempts):
+                n+=1
                 _action=self.get_action(_current_state,_target_state)
                 _voltage =_action['voltage']
                 _pulse_duration = _action['pulse_duration']
@@ -41,9 +44,9 @@ class Arc2Tester(ABC):
                 _new_state = hardware.get_current_device_state()
                 if _new_state ==_target_state or arc2.STATES[_new_state]=="FAIL":
                     break
-               # self.update(_current_state,_target_state,_action,_new_state)
+                self.update(_current_state,_target_state,_action,_new_state)
                 _current_state=_new_state
-                
+            _time_record=n    
             #_action_index =  int((_voltage+5)/0.5)
             #_transition_record[_current_state][_new_state][_action_index]+=1
             _report.append(
@@ -57,7 +60,8 @@ class Arc2Tester(ABC):
                     'voltage_applied': _voltage,
                     'voltage_pulse': _pulse_duration,
                     'success': _target_state == _new_state,
-                    'table': _transition_record
+                    'table': _transition_record,
+                    'time_step':_time_record
                 }
             )
            
@@ -136,9 +140,9 @@ class EpsilonGreedyTester(Arc2Tester):
     """
     def __init__(self, max_attempts:int,voltage_step:int, gamma:float):
         super().__init__()
-        _voltage_inc=(arc2.MAX_VOLTAGE - arc2.MIN_VOLTAGE)/float(voltage_step) #float voltage increment (0.5)
+        self._voltage_inc=(arc2.MAX_VOLTAGE - arc2.MIN_VOLTAGE)/float(voltage_step) #float voltage increment (0.5)
         self._voltage_step= voltage_step+1 # total number of actions(20)
-        self._voltages= [arc2.MIN_VOLTAGE+i*_voltage_inc for i in range(self._voltage_step)] #actual value of volatges
+        self._voltages= [arc2.MIN_VOLTAGE+i*self._voltage_inc for i in range(self._voltage_step)] #actual value of volatges
         self._expected_reward_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
                                                 arc2.NUM_NON_FAIL_STATES,
                                                 self._voltage_step))
@@ -173,7 +177,7 @@ class EpsilonGreedyTester(Arc2Tester):
         add 1 to self_exploration every time we explore(take single action)
         """
         self._exploration += 1
-        _index= int(action['voltage']/_voltage_inc)
+        _index= int(action['voltage']/self._voltage_inc)
         if new_state==target_state :
             self._expected_reward_table[old_state][target_state][_index]+=10
         elif new_state==3 :#fail
@@ -211,6 +215,9 @@ def main(args):
     
     "Use a loop to run number of times representing running your algorithm on many wafers"
     _stat_report=[]
+    _yield_lists=[]
+    _failed_lists=[]
+    _time_list=[]
     for i in range (args.number_wafers):
         """Simulate a test module applying voltages to a number of devices in a wafer"""
         _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices)
@@ -231,30 +238,40 @@ def main(args):
         _state_I = sum([d['to state I'] for d in _report])
         _state_II = sum([d['to state II'] for d in _report])
         _failed_devices = sum([d['actual_state']=="FAIL" for d in _report])
+        _yield=100*(_successful_electroform/ args.number_devices)
     # _target=[d['target_state'] for d in _report]
     # _current=[d['current_state'] for d in _report]
     # _new=[d['actual_state'] for d in _report]
         
-        if args.list_states:
+        if args.additional_info:
             print("Num of devices in state I : ", _state_I)
             print("Num of devices in state II : ", _state_II)
+            print("Successful electroform in wafer number ",i+1,'is' ,_successful_electroform)
+            print("Failed devices in wafer number ",i+1,'is', _failed_devices)
+            print("The First Pass Yield(FPY) in wafer number  ",i+1,'is',_yield ,'% \n')
         
-        print("Devices in wafer: ", args.number_devices)
-        print("Devices tested: ", len(_report))
+       
         #print("State of Devices : ", _current)
         #print(" New State of Devices : ", _new)
         #print("Voltage : ", [d['voltage_applied'] for d in _report])
-        print("Successful electroform in wafer number ",i+1,'is' ,_successful_electroform)
-        print("Failed devices in wafer number ",i+1,'is', _failed_devices)
-        print("The First Pass Yield(FPY) in wafer number  ",i+1,'is', 100*(_successful_electroform/ args.number_devices),'% \n')
-        table= [d['table'] for d in _report]
+        #table= [d['table'] for d in _report]
         #print(table[-1])
         
         _stat_report.append(_successful_electroform)
-    _mean= np.mean(_stat_report)   
-    _std= np.std(_stat_report) 
-    print('The average  and standard deviation of Successful electroform in a number of wafer are ',_mean,'and',  _std ,'respectively')
-
+        _yield_lists.append(_yield)
+        _failed_lists.append(_failed_devices)
+        _time_list.append(sum([d['time_step'] for d in _report])/args.number_devices)
+    _time_mean=np.mean(_time_list)
+    _yield_mean=np.mean(_yield_lists) 
+    _failed_mean=np.mean(_failed_lists)
+    _success_mean= np.mean(_stat_report) 
+    _success_std= np.std(_stat_report) 
+    print("Devices in wafer: ", args.number_devices)
+    print("Devices tested: ", len(_report))
+    print('The average successful electroform for ',args.number_wafers,' wafers is','%.2f' % _success_mean,'and', '%.2f' % _success_std ,'std')
+    print("Average Yield for",args.number_wafers,"wafers is",'%.2f' % _yield_mean,'%, ','%.2f' % np.std(_yield_lists),'%','std') 
+    print('Average successful forming time','%.2f' % _time_mean,'%, ','%.2f' % np.std(_time_list),'%','std')
+    print("Average failed devices for",'%.2f' % args.number_wafers,"wafers is",'%.2f' % _failed_mean,'%, ','%.2f' % np.std(_failed_lists),'%','std')
 
 def parser_setup(parser):
     """Setup command line arguments"""
@@ -296,8 +313,8 @@ def parser_setup(parser):
     )
     group_output = parser.add_argument_group("output options")
     group_output.add_argument(
-        "--list-states",
-        help="Number of devices in each state after electroform.",
+        "--additional-info",
+        help="Additional information(number of devices in each state, yield of each wafer..)",
         action="store_true"
     )
     group_output.add_argument(
