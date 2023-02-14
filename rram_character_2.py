@@ -10,12 +10,14 @@ SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 2
 DEFAULT_MAX_ATTEMPT =10
+STEP_VOLTAGES=20
 DEFAULT_ALGORITHM = "random"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
 class Arc2Tester(ABC):
     """This is the deliverable"""
+    
     def run(self,hardware: arc2.Arc2HardwareSimulator) -> list:
         """Run test on hardware"""
         _report = []
@@ -30,14 +32,16 @@ class Arc2Tester(ABC):
             _target_state = random.choice(list(_possible_target_states))
             # determine the voltage to apply
             for i in range(args.max_attempts):
-            
-                _voltage, _pulse_duration = self.get_action(_current_state,_target_state)
+                _action=self.get_action(_current_state,_target_state)
+                _voltage =_action['voltage']
+                _pulse_duration = _action['pulse_duration']
                 # apply to hardware a number of times representing pulse length
                 for _ in range(_pulse_duration):
                     hardware.apply_voltage(_voltage)
                 _new_state = hardware.get_current_device_state()
                 if _new_state ==_target_state or arc2.STATES[_new_state]=="FAIL":
                     break
+               # self.update(_current_state,_target_state,_action,_new_state)
                 _current_state=_new_state
                 
             #_action_index =  int((_voltage+5)/0.5)
@@ -61,24 +65,44 @@ class Arc2Tester(ABC):
             if not hardware.move_to_next_device():
                 break
         return _report
+    
+    
 
     @abstractmethod
-    def get_action(self, current_state, target_state) -> tuple:
+    def get_action(self, current_state, target_state) -> dict:
         raise NotImplementedError("Must override get_action")
-
+    def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        pass
 
 class RandomVoltageArc2Tester(Arc2Tester):
-    """First attempt - let's just pick a voltage randomly"""
+    
+    """First attelet's just pick a voltage randomly"""
+    def __init__(self):
+        super().__init__()
+    
+    def get_action(self, current_state, target_state) -> dict:
+        _voltage= random.uniform(arc2.MIN_VOLTAGE,arc2.MAX_VOLTAGE)
+        return {'voltage':_voltage, 
+                'pulse_duration': 1}
+    
+    def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        pass
+class RandomVoltageWithRangeKnowledgeArc2Tester(Arc2Tester):
+    """Addition to First attempt - let's just pick a voltage randomly but with using already
+    known knowlege of hardware device"""
     def __init__(self):
         super().__init__()
 
-    def get_action(self, current_state, target_state) -> tuple:
-        action= random.randrange(arc2.MIN_VOLTAGE*10,arc2.MAX_VOLTAGE*10,5)/10 , 1
+    def get_action(self, current_state, target_state) -> dict:
+        _voltage = random.randrange(arc2.MIN_VOLTAGE*10,arc2.MAX_VOLTAGE*10,5)/10 
         if current_state == 0:
-            action= random.randrange(0,arc2.MAX_VOLTAGE*10,5)/10 , 1
+            _voltage = random.randrange(0,arc2.MAX_VOLTAGE*10,5)/10 
         elif current_state == 2:
-            action= -random.randrange(0,arc2.MAX_VOLTAGE*10,5)/10 , 1
-        return action
+            _voltage= -random.randrange(0,arc2.MAX_VOLTAGE*10,5)/10 
+        return {'voltage':_voltage, 
+                'pulse_duration': 1}
+    def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        pass
     #random.uniform(arc2.MIN_VOLTAGE,arc2.MAX_VOLTAGE), 1
 
 
@@ -96,10 +120,75 @@ class ExperiencedUserTester(Arc2Tester):
             [-4.0, -2.0, 0.0, 0.0],
             [ 0.0,  0.0, 0.0, 0.0]]
 
-    def get_action(self, current_state, target_state) -> tuple:
-        return self._lookup_voltage_cheat[current_state][target_state], 1
+    def get_action(self, current_state, target_state) -> dict:
+        return {'voltage': self._lookup_voltage_cheat[current_state][target_state],
+                'pulse_duration':1}
 
 
+class EpsilonGreedyTester(Arc2Tester):
+    """ Third attempt- mix exploration with simple exploitation 
+    Use a greedy epsilon method. start with lots of random exploration to generate an expected 
+    reward table and change slowly to exploitation using a simple reward based approach 
+    Reward:
+    +1 if device didn't fail during electroform
+    +10 if device succesfully electroformed 
+    -20 if device failed after electroforming 
+    """
+    def __init__(self, max_attempts:int,voltage_step:int, gamma:float):
+        super().__init__()
+        _voltage_inc=(arc2.MAX_VOLTAGE - arc2.MIN_VOLTAGE)/float(voltage_step) #float voltage increment (0.5)
+        self._voltage_step= voltage_step+1 # total number of actions(20)
+        self._voltages= [arc2.MIN_VOLTAGE+i*_voltage_inc for i in range(self._voltage_step)] #actual value of volatges
+        self._expected_reward_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
+                                                arc2.NUM_NON_FAIL_STATES,
+                                                self._voltage_step))
+        self._epsilon = 1
+        self._gamma= gamma
+        self._exploitation = 0
+        self._exploration = 0
+        self._action_value_est= 0
+        
+    def get_action(self, current_state, target_state) -> dict:
+        
+        _actions= self._voltages
+        for i in range(args.max_attempts):
+             
+            p = np.random.random()
+            if p < self._epsilon:
+                _voltage_index = np.random.choice(self._voltage_step)
+            else:
+                _voltage_index = np.argmax([a for a in self._expected_reward_table[current_state][target_state]])
+            x = _actions[_voltage_index]
+            action={'voltage': self._voltages[_voltage_index],
+                'pulse_duration':1}
+            
+        
+        return {'voltage': self._voltages[_voltage_index],
+                'pulse_duration':1,
+                'voltage_index':_voltage_index}
+           
+        
+    def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        """update the expected reward table
+        add 1 to self_exploration every time we explore(take single action)
+        """
+        self._exploration += 1
+        _index= int(action['voltage']/_voltage_inc)
+        if new_state==target_state :
+            self._expected_reward_table[old_state][target_state][_index]+=10
+        elif new_state==3 :#fail
+            self._expected_reward_table[old_state][target_state][_index]-=20
+        else:
+            self._expected_reward_table[old_state][target_state][_index]+=1
+            
+            
+       ## self._action_value_est = (1 - 1.0 / self._exploration)*self._action_value_est + 1.0 / self._exploration * action['voltage']
+        ## self._expected_reward_table[old_state][new_state][_voltage_index]=self._action_value_est
+        
+        #favour exploitation a little bit more   
+        self._epsilon *= self._gamma
+                
+        
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
     """Plot the hardware distribution for each state"""
     _num_samples = (arc2.MAX_VOLTAGE-arc2.MIN_VOLTAGE)/(SAMPLE_VOLTAGE_IN_MV/1000.0)
@@ -127,8 +216,12 @@ def main(args):
         _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices)
         if args.algorithm_to_use == "random":
             _arc_tester = RandomVoltageArc2Tester()
+        elif args.algorithm_to_use == "randomwithrange":
+            _arc_tester = RandomVoltageWithRangeKnowledgeArc2Tester()
         elif args.algorithm_to_use == "expuser":
             _arc_tester = ExperiencedUserTester()
+        elif args.algorithm_to_use == "epsilon":
+            _arc_tester = EpsilonGreedyTester(args.max_attempts,STEP_VOLTAGES, GAMMA)
         else:
             raise RuntimeError("Unknown algorithm!")
         if args.plot_hardware_dist:
