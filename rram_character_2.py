@@ -47,8 +47,8 @@ class Arc2Tester(ABC):
                 self.update(_current_state,_target_state,_action,_new_state)
                 _current_state=_new_state
             _time_record=n    
-            #_action_index =  int((_voltage+5)/0.5)
-            #_transition_record[_current_state][_new_state][_action_index]+=1
+            _action_index =  int((_voltage+5)/0.5)
+            _transition_record[_current_state][_new_state][_action_index-1]+=1
             _report.append(
                 {
                     'current_state': arc2.STATES[_current_state],
@@ -107,8 +107,6 @@ class RandomVoltageWithRangeKnowledgeArc2Tester(Arc2Tester):
                 'pulse_duration': 1}
     def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
         pass
-    #random.uniform(arc2.MIN_VOLTAGE,arc2.MAX_VOLTAGE), 1
-
 
 class ExperiencedUserTester(Arc2Tester):
     """Second attempt - a knowledge user has determined a good set of values
