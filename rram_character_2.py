@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import argparse
 import logging
 import random
@@ -11,7 +12,7 @@ DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 2
 DEFAULT_MAX_ATTEMPT =2
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "epsilon"
+DEFAULT_ALGORITHM = "random"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -22,7 +23,7 @@ class Arc2Tester(ABC):
         """Run test on hardware"""
         _report = []
         _time_record=[]
-        _transition_record= np.array(np.zeros([3,4,20]))
+       # _transition_record= np.array(np.zeros([3,4,20]))
         while True:
             n=0 #time step
             # get current state of device from the hardware
@@ -48,19 +49,19 @@ class Arc2Tester(ABC):
                 _current_state=_new_state
             _time_record=n    
             _action_index =  int((_voltage+5)/0.5)
-            _transition_record[_current_state][_new_state][_action_index-1]+=1
+           # _transition_record[_current_state][_new_state][_action_index-1]+=1
             _report.append(
                 {
                     'current_state': arc2.STATES[_current_state],
                     'target_state': arc2.STATES[_target_state],
                     'actual_state': arc2.STATES[_new_state],
-                    'to state I': _new_state == 0,
-                    'to state II': _new_state == 1,
-                    'to state III': _new_state == 2,
+                   # 'to state I': _new_state == 0,
+                   # 'to state II': _new_state == 1,
+                   # 'to state III': _new_state == 2,
                     'voltage_applied': _voltage,
                     'voltage_pulse': _pulse_duration,
                     'success': _target_state == _new_state,
-                    'table': _transition_record,
+                    #Í'table': _transition_record,
                     'time_step':_time_record
                 }
             )
@@ -144,7 +145,7 @@ class EpsilonGreedyTester(Arc2Tester):
         self._expected_reward_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
                                                 arc2.NUM_NON_FAIL_STATES,
                                                 self._voltage_step))
-        self._epsilon = 1
+        self._epsilon = 1/5
         self._gamma= gamma
         self._exploitation = 0
         self._exploration = 0
@@ -153,19 +154,21 @@ class EpsilonGreedyTester(Arc2Tester):
     def get_action(self, current_state, target_state) -> dict:
         
         _actions= self._voltages
-        for i in range(args.max_attempts):
+        #for i in range(args.max_attempts):
              
-            p = np.random.random()
-            if p < self._epsilon:
-                _voltage_index = np.random.choice(self._voltage_step)
-            else:
-                _voltage_index = np.argmax([a for a in self._expected_reward_table[current_state][target_state]])
-            x = _actions[_voltage_index]
-            action={'voltage': self._voltages[_voltage_index],
-                'pulse_duration':1}
+        p = np.random.random()
+        if p < self._epsilon:
+            _voltage_index = np.random.choice(self._voltage_step)
+            _voltage=self._voltages[_voltage_index]
+        else:
+            _voltage_index = np.argmax([a for a in self._expected_reward_table[current_state][target_state]])
+            _voltage=self._voltages[_voltage_index]
+        x = _actions[_voltage_index]
+        action={'voltage': _voltage,
+            'pulse_duration':1}
             
         
-        return {'voltage': self._voltages[_voltage_index],
+        return {'voltage': _voltage,
                 'pulse_duration':1,
                 'voltage_index':_voltage_index}
            
@@ -190,7 +193,56 @@ class EpsilonGreedyTester(Arc2Tester):
         #favour exploitation a little bit more   
         self._epsilon *= self._gamma
                 
+class QLearn(Arc2Tester):
+     
+    def __init__(self,voltage_step, learning_rate=0.5, discount=0.95, exploration_rate=1.0):
+        self.learning_rate = learning_rate
+        self.discount = discount # How much we appreciate future reward over current
+        self.exploration_rate = exploration_rate # Initial exploration rate
+        #self.exploration_delta = 1.0 / iterations # Shift from exploration to explotation  
+        #self.iterations =iterations
+        self._voltage_inc=(arc2.MAX_VOLTAGE - arc2.MIN_VOLTAGE)/float(voltage_step) #float voltage increment (0.5)
+        self._voltage_step= voltage_step+1 # total number of actions(20)
+        self._voltages= [arc2.MIN_VOLTAGE+i*self._voltage_inc for i in range(self._voltage_step)] #actual value of volatges
+        self._expected_Q_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
+                                                arc2.NUM_NON_FAIL_STATES,
+                                                self._voltage_step))   
         
+    def get_action(self, current_state, target_state) -> dict: 
+         
+         #for i in range(self.iterations):
+             
+        p = np.random.random()
+        if p < self.exploration_rate:
+            _voltage_index = np.random.choice(self._voltage_step)
+        else:
+            _voltage_index = np.argmax([a for a in self._expected_Q_table[current_state][target_state]])
+            
+        
+        return {'voltage': self._voltages[_voltage_index],
+                'pulse_duration':1,
+                'voltage_index':_voltage_index}
+         
+    
+    def update(self,old_state:int, target_state:int, action:dict, new_state:int) :
+        if new_state==target_state :
+            reward=10
+        elif new_state==3 :#fail
+            reward=-20
+        else:
+            reward=1
+        _index= int(action['voltage']/self._voltage_inc)
+        # Ask the model for the Q values of the old state (inference)
+        old_state_Q_values = self._expected_Q_table[old_state][target_state]
+        new_state_Q_values = self._expected_Q_table[new_state][target_state]
+        
+        old_state_Q_values[_index]= reward+ self.discount * np.amax(new_state_Q_values)
+        self._expected_Q_table[old_state][target_state][_index] = old_state_Q_values[_index]
+         # Finally shift our exploration_rate toward zero (less gambling)
+        if self.exploration_rate > 0:  
+            self.exploration_rate *= 0.9
+               
+         
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
     """Plot the hardware distribution for each state"""
     _num_samples = (arc2.MAX_VOLTAGE-arc2.MIN_VOLTAGE)/(SAMPLE_VOLTAGE_IN_MV/1000.0)
@@ -199,6 +251,7 @@ def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
     # normally have access to
     for i, _func in enumerate(hardware._state_transitions):
         _ax = plt.subplot(2,2,i+1)
+       #_ax.set_facecolor("#000000")
         _ax.set_title(arc2.STATES[i])
         _ax.set_xlim([arc2.MIN_VOLTAGE, arc2.MAX_VOLTAGE])
         _probs = np.array([_func(v) for v in _voltage])
@@ -210,6 +263,10 @@ def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
 
 
 def main(args):
+    
+    start = time.time()
+
+    
     
     "Use a loop to run number of times representing running your algorithm on many wafers"
     _stat_report=[]
@@ -227,6 +284,8 @@ def main(args):
             _arc_tester = ExperiencedUserTester()
         elif args.algorithm_to_use == "epsilon":
             _arc_tester = EpsilonGreedyTester(args.max_attempts,STEP_VOLTAGES, GAMMA)
+        elif args.algorithm_to_use == "deep":
+            _arc_tester = QLearn(voltage_step=STEP_VOLTAGES)
         else:
             raise RuntimeError("Unknown algorithm!")
         if args.plot_hardware_dist:
@@ -268,8 +327,10 @@ def main(args):
     print("Devices tested: ", len(_report))
     print('The average successful electroform for ',args.number_wafers,' wafers is','%.2f' % _success_mean,'and', '%.2f' % _success_std ,'std')
     print("Average Yield for",args.number_wafers,"wafers is",'%.2f' % _yield_mean,'%, ','%.2f' % np.std(_yield_lists),'%','std') 
-    print('Average successful forming time','%.2f' % _time_mean,'%, ','%.2f' % np.std(_time_list),'%','std')
-    print("Average failed devices for",'%.2f' % args.number_wafers,"wafers is",'%.2f' % _failed_mean,'%, ','%.2f' % np.std(_failed_lists),'%','std')
+    print('Average successful forming time','%.2f' % _time_mean,'%.2f' % np.std(_time_list),'std')
+    print("Average failed devices for",'%.2f' % args.number_wafers,"wafers is",'%.2f' %( _failed_mean/10),'%, ','%.2f' % (np.std(_failed_lists)/10),'%','std')
+    tt=(time.time()-start)/60
+    print('It took', tt, 'minutes.')
 
 def parser_setup(parser):
     """Setup command line arguments"""
