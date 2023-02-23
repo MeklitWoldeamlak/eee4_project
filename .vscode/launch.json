@@ -10,7 +10,7 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "args": ["-m=1","-w=1","-a='epsilom'"],
+            "args": ["-m=1","-w=1"],
             "console": "integratedTerminal",
             "justMyCode": true
         }

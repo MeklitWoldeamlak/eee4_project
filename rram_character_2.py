@@ -10,9 +10,9 @@ import arc2_simulator2 as arc2
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 1
-DEFAULT_MAX_ATTEMPT =20
+DEFAULT_MAX_ATTEMPT =10
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "random"
+DEFAULT_ALGORITHM = "epsilon"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -168,8 +168,17 @@ class EpsilonGreedyTester(Arc2Tester):
         p = np.random.random()
         if p < self._epsilon:
             self._exploration += 1
-            _voltage_index = np.random.choice(self._voltage_step)
-            _voltage=self._voltages[_voltage_index]
+            if current_state == 0:
+                _voltage_index = random.randrange((self._voltage_step-1)/2,self._voltage_step)
+            elif current_state == 1 and target_state ==0:
+                _voltage_index= random.randrange(0,(self._voltage_step-1)/2)
+            elif current_state == 1 and target_state ==2:
+                _voltage_index= random.randrange((self._voltage_step-1)/2,self._voltage_step)
+            elif current_state == 2:
+                _voltage_index= random.randrange(0,(self._voltage_step-1)/2)
+            _voltage=self._voltages[_voltage_index] 
+            #_voltage_index = np.random.choice(self._voltage_step)
+            #_voltage=self._voltages[_voltage_index]
         else:
             self._exploitation+= 1
             _voltage_index = np.argmax([a for a in self._expected_reward_table[current_state][target_state]])
@@ -203,13 +212,21 @@ class EpsilonGreedyTester(Arc2Tester):
         self._epsilon *= 0.999
     def q_table(self):
         Q=self._expected_reward_table
-        print(self._exploration) 
-        print(self._exploitation) 
-        print(self._epsilon)
-        print(Q)          
+        _mean_voltage=np.zeros((arc2.NUM_NON_FAIL_STATES,arc2.NUM_NON_FAIL_STATES))
+        for i in range(arc2.NUM_NON_FAIL_STATES):
+            for j in range(arc2.NUM_NON_FAIL_STATES):
+                _mean_v_index = np.argmax([a for a in Q[i][j]])
+                _mean_voltage[i,j]=self._voltages[_mean_v_index]
+                if i==j:
+                    _mean_voltage[i,j]=0        
+        print('Number of exploration=', self._exploration) 
+        print('Number of exploitation=', self._exploitation) 
+        print('Final epsilon=', self._epsilon)
+        print(Q)
+        print(_mean_voltage)          
 class QLearn(Arc2Tester):
      
-    def __init__(self,voltage_step, learning_rate=0.5, discount=0.95, exploration_rate=1.0):
+    def __init__(self,voltage_step, learning_rate=ALPHA, discount=GAMMA, exploration_rate=1.0):
         self.learning_rate = learning_rate
         self.discount = discount # How much we appreciate future reward over current
         self.exploration_rate = exploration_rate # Initial exploration rate
@@ -240,17 +257,12 @@ class QLearn(Arc2Tester):
             self._exploitation+= 1
             _voltage_index = np.argmax([a for a in self._expected_Q_table[current_state][target_state]])
             _voltage=self._voltages[_voltage_index]
-        x = _actions[_voltage_index]
-        action={'voltage': _voltage,
-            'pulse_duration':1}
             
-        
         return {'voltage': _voltage,
                 'pulse_duration':1,
                 'voltage_index':_voltage_index
         }
            
-    
     def update(self,old_state:int, target_state:int, action:dict, new_state:int) :
         if new_state==target_state :
             reward=10
@@ -268,12 +280,14 @@ class QLearn(Arc2Tester):
             new_state_Q_values = self._expected_Q_table[new_state][target_state]
         
         old_state_Q_values[_index]= reward+ self.discount * np.amax(new_state_Q_values)
-        TD= reward+ GAMMA*np.amax(new_state_Q_values)- old_state_Q_values[_index]
-        self._expected_Q_table[old_state][target_state][_index] += ALPHA * TD
-        #self._expected_Q_table[old_state][target_state][_index] = old_state_Q_values[_index]
-         # Finally shift our exploration_rate toward zero (less gambling)
-       # if self.exploration_rate > 0:  
-        self.exploration_rate *= 0.999  
+        # Compute the temporal difference
+        # The action here exactly refers to going to the next state
+        TD= reward+ self.discount*np.amax(new_state_Q_values)- old_state_Q_values[_index]
+        # Update the Q-Value using the Bellman equation
+        self._expected_Q_table[old_state][target_state][_index] += self.learning_rate * TD 
+        #favour exploitation a little bit more 
+        self.exploration_rate *= 0.999 
+         
     def q_table(self):
         Q=self._expected_Q_table[-1]
         print(self._exploration) 
