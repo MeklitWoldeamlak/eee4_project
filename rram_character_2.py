@@ -12,7 +12,7 @@ DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 1
 DEFAULT_MAX_ATTEMPT =20
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "qlearn"
+DEFAULT_ALGORITHM = "random"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -71,7 +71,7 @@ class Arc2Tester(ABC):
             # check to see if we have finished the wafer
             if not hardware.move_to_next_device():
                 break
-        #self.q_table()
+        self.q_table()
         return _report
     
     
