@@ -12,7 +12,7 @@ DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 1
 DEFAULT_MAX_ATTEMPT =20
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "epsilon"
+DEFAULT_ALGORITHM = "deep"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -57,9 +57,9 @@ class Arc2Tester(ABC):
                     'current_state': arc2.STATES[_current_state],
                     'target_state': arc2.STATES[_target_state],
                     'actual_state': arc2.STATES[_new_state],
-                   # 'to state I': _new_state == 0,
-                   # 'to state II': _new_state == 1,
-                   # 'to state III': _new_state == 2,
+                    'to state I': _new_state == 0,
+                    'to state II': _new_state == 1,
+                    'to state III': _new_state == 2,
                     'voltage_applied': _voltage,
                     'voltage_pulse': _pulse_duration,
                     'success': _target_state == _new_state,
@@ -71,7 +71,7 @@ class Arc2Tester(ABC):
             # check to see if we have finished the wafer
             if not hardware.move_to_next_device():
                 break
-        self.q_table()
+        #self.q_table()
         return _report
     
     
@@ -154,7 +154,7 @@ class EpsilonGreedyTester(Arc2Tester):
         self._expected_reward_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
                                                 arc2.NUM_NON_FAIL_STATES,
                                                 self._voltage_step))
-        self._epsilon = 1/5
+        self._epsilon = 1
         self._gamma= gamma
         self._exploitation = 0
         self._exploration = 0
@@ -186,7 +186,8 @@ class EpsilonGreedyTester(Arc2Tester):
         add 1 to self_exploration every time we explore(take single action)
         """
         
-        _index= int(action['voltage']/self._voltage_inc)
+       # _index= int(action['voltage']/self._voltage_inc)
+        _index= action['voltage_index']
         if new_state==target_state :
             self._expected_reward_table[old_state][target_state][_index]+=10
         elif new_state==3 :#fail
@@ -199,13 +200,13 @@ class EpsilonGreedyTester(Arc2Tester):
         ## self._expected_reward_table[old_state][new_state][_voltage_index]=self._action_value_est
         
         #favour exploitation a little bit more   
-        self._epsilon *= 0.9
+        self._epsilon *= 0.999
     def q_table(self):
-        self.Q=self._expected_reward_table
+        Q=self._expected_reward_table
         print(self._exploration) 
         print(self._exploitation) 
         print(self._epsilon)
-        print(self.Q)          
+        print(Q)          
 class QLearn(Arc2Tester):
      
     def __init__(self,voltage_step, learning_rate=0.5, discount=0.95, exploration_rate=1.0):
@@ -257,7 +258,8 @@ class QLearn(Arc2Tester):
             reward=-20
         else:
             reward=1
-        _index= int(action['voltage']/self._voltage_inc)
+       # _index= int(action['voltage']/self._voltage_inc)
+        _index= action['voltage_index']
         # Ask the model for the Q values of the old state (inference)
         old_state_Q_values = self._expected_Q_table[old_state][target_state]
         if new_state==3:
@@ -273,11 +275,11 @@ class QLearn(Arc2Tester):
        # if self.exploration_rate > 0:  
         self.exploration_rate *= 0.999  
     def q_table(self):
-        self.Q=self._expected_Q_table[-1]
+        Q=self._expected_Q_table[-1]
         print(self._exploration) 
         print(self._exploitation) 
         print(self.exploration_rate)
-        print(self.Q)
+        print(Q)
                
          
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
@@ -338,8 +340,8 @@ def main(args):
             plot_hardware_distribution(_arc2_hardware)
         _report = _arc_tester.run(_arc2_hardware)
         _successful_electroform = sum([d['success'] for d in _report])
-       # _state_I = sum([d['to state I'] for d in _report])
-       # _state_II = sum([d['to state II'] for d in _report])
+        _state_I = sum([d['to state I'] for d in _report])
+        _state_II = sum([d['to state II'] for d in _report])
         _failed_devices = sum([d['actual_state']=="FAIL" for d in _report])
         _yield=100*(_successful_electroform/ args.number_devices)
         
