@@ -12,7 +12,7 @@ DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 1
 DEFAULT_MAX_ATTEMPT =20
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "deep"
+DEFAULT_ALGORITHM = "qlearn"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -332,7 +332,7 @@ def main(args):
             _arc_tester = ExperiencedUserTester()
         elif args.algorithm_to_use == "epsilon":
             _arc_tester = EpsilonGreedyTester(args.max_attempts,STEP_VOLTAGES, GAMMA)
-        elif args.algorithm_to_use == "deep":
+        elif args.algorithm_to_use == "qlearn":
             _arc_tester = QLearn(voltage_step=STEP_VOLTAGES)
         else:
             raise RuntimeError("Unknown algorithm!")
