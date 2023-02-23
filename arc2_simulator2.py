@@ -32,7 +32,6 @@ _NON_FAIL_STATE_TPS_PARAMS = [
         ]
     ]
 
-
 def _normal_dist(prob: np.float32, mean: np.float32, std: np.float32):
     def _norm(x: np.float32) -> np.float32:
         return prob * (1.0/(std*(2.0*np.pi)**(0.5))) * np.exp(-0.5*((x-mean)/std)**2)

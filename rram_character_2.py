@@ -9,10 +9,10 @@ import arc2_simulator2 as arc2
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
-DEFAULT_NUMBER_WAFERS = 2
-DEFAULT_MAX_ATTEMPT =2
+DEFAULT_NUMBER_WAFERS = 1
+DEFAULT_MAX_ATTEMPT =20
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "random"
+DEFAULT_ALGORITHM = "epsilon"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -43,9 +43,11 @@ class Arc2Tester(ABC):
                 for _ in range(_pulse_duration):
                     hardware.apply_voltage(_voltage)
                 _new_state = hardware.get_current_device_state()
+                
+                self.update(_current_state,_target_state,_action,_new_state)
                 if _new_state ==_target_state or arc2.STATES[_new_state]=="FAIL":
                     break
-                self.update(_current_state,_target_state,_action,_new_state)
+                 
                 _current_state=_new_state
             _time_record=n    
             _action_index =  int((_voltage+5)/0.5)
@@ -69,6 +71,7 @@ class Arc2Tester(ABC):
             # check to see if we have finished the wafer
             if not hardware.move_to_next_device():
                 break
+        self.q_table()
         return _report
     
     
@@ -77,6 +80,8 @@ class Arc2Tester(ABC):
     def get_action(self, current_state, target_state) -> dict:
         raise NotImplementedError("Must override get_action")
     def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        pass
+    def q_table(self):
         pass
 
 class RandomVoltageArc2Tester(Arc2Tester):
@@ -91,6 +96,8 @@ class RandomVoltageArc2Tester(Arc2Tester):
                 'pulse_duration': 1}
     
     def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        pass
+    def q_table(self):
         pass
 class RandomVoltageWithRangeKnowledgeArc2Tester(Arc2Tester):
     """Addition to First attempt - let's just pick a voltage randomly but with using already
@@ -107,6 +114,8 @@ class RandomVoltageWithRangeKnowledgeArc2Tester(Arc2Tester):
         return {'voltage':_voltage, 
                 'pulse_duration': 1}
     def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        pass
+    def q_table(self):
         pass
 
 class ExperiencedUserTester(Arc2Tester):
@@ -158,31 +167,30 @@ class EpsilonGreedyTester(Arc2Tester):
              
         p = np.random.random()
         if p < self._epsilon:
+            self._exploration += 1
             _voltage_index = np.random.choice(self._voltage_step)
             _voltage=self._voltages[_voltage_index]
         else:
+            self._exploitation+= 1
             _voltage_index = np.argmax([a for a in self._expected_reward_table[current_state][target_state]])
-            _voltage=self._voltages[_voltage_index]
-        x = _actions[_voltage_index]
-        action={'voltage': _voltage,
-            'pulse_duration':1}
-            
+            _voltage=self._voltages[_voltage_index]       
         
         return {'voltage': _voltage,
                 'pulse_duration':1,
-                'voltage_index':_voltage_index}
+                'voltage_index':_voltage_index
+        }
            
         
     def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
         """update the expected reward table
         add 1 to self_exploration every time we explore(take single action)
         """
-        self._exploration += 1
+        
         _index= int(action['voltage']/self._voltage_inc)
         if new_state==target_state :
             self._expected_reward_table[old_state][target_state][_index]+=10
         elif new_state==3 :#fail
-            self._expected_reward_table[old_state][target_state][_index]-=20
+            self._expected_reward_table[old_state][target_state][_index]+=-20
         else:
             self._expected_reward_table[old_state][target_state][_index]+=1
             
@@ -191,8 +199,13 @@ class EpsilonGreedyTester(Arc2Tester):
         ## self._expected_reward_table[old_state][new_state][_voltage_index]=self._action_value_est
         
         #favour exploitation a little bit more   
-        self._epsilon *= self._gamma
-                
+        self._epsilon *= 0.9
+    def q_table(self):
+        self.Q=self._expected_reward_table
+        print(self._exploration) 
+        print(self._exploitation) 
+        print(self._epsilon)
+        print(self.Q)          
 class QLearn(Arc2Tester):
      
     def __init__(self,voltage_step, learning_rate=0.5, discount=0.95, exploration_rate=1.0):
@@ -207,22 +220,35 @@ class QLearn(Arc2Tester):
         self._expected_Q_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
                                                 arc2.NUM_NON_FAIL_STATES,
                                                 self._voltage_step))   
+        self._exploration=0
+        self._exploitation=0
+        
         
     def get_action(self, current_state, target_state) -> dict: 
          
          #for i in range(self.iterations):
+        _actions= self._voltages
+        #for i in range(args.max_attempts):
              
         p = np.random.random()
         if p < self.exploration_rate:
+            self._exploration += 1
             _voltage_index = np.random.choice(self._voltage_step)
+            _voltage=self._voltages[_voltage_index]
         else:
+            self._exploitation+= 1
             _voltage_index = np.argmax([a for a in self._expected_Q_table[current_state][target_state]])
+            _voltage=self._voltages[_voltage_index]
+        x = _actions[_voltage_index]
+        action={'voltage': _voltage,
+            'pulse_duration':1}
             
         
-        return {'voltage': self._voltages[_voltage_index],
+        return {'voltage': _voltage,
                 'pulse_duration':1,
-                'voltage_index':_voltage_index}
-         
+                'voltage_index':_voltage_index
+        }
+           
     
     def update(self,old_state:int, target_state:int, action:dict, new_state:int) :
         if new_state==target_state :
@@ -234,13 +260,24 @@ class QLearn(Arc2Tester):
         _index= int(action['voltage']/self._voltage_inc)
         # Ask the model for the Q values of the old state (inference)
         old_state_Q_values = self._expected_Q_table[old_state][target_state]
-        new_state_Q_values = self._expected_Q_table[new_state][target_state]
+        if new_state==3:
+            new_state_Q_values=np.zeros([20])
+        else:
+            new_state_Q_values = self._expected_Q_table[new_state][target_state]
         
         old_state_Q_values[_index]= reward+ self.discount * np.amax(new_state_Q_values)
-        self._expected_Q_table[old_state][target_state][_index] = old_state_Q_values[_index]
+        TD= reward+ GAMMA*np.amax(new_state_Q_values)- old_state_Q_values[_index]
+        self._expected_Q_table[old_state][target_state][_index] += ALPHA * TD
+        #self._expected_Q_table[old_state][target_state][_index] = old_state_Q_values[_index]
          # Finally shift our exploration_rate toward zero (less gambling)
-        if self.exploration_rate > 0:  
-            self.exploration_rate *= 0.9
+       # if self.exploration_rate > 0:  
+        self.exploration_rate *= 0.999  
+    def q_table(self):
+        self.Q=self._expected_Q_table[-1]
+        print(self._exploration) 
+        print(self._exploitation) 
+        print(self.exploration_rate)
+        print(self.Q)
                
          
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
@@ -251,12 +288,21 @@ def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
     # normally have access to
     for i, _func in enumerate(hardware._state_transitions):
         _ax = plt.subplot(2,2,i+1)
+        plt.subplots_adjust(left=0.1,
+                    bottom=0.1,
+                    right=0.9,
+                    top=0.9,
+                    wspace=0.4,
+                    hspace=0.4)
        #_ax.set_facecolor("#000000")
         _ax.set_title(arc2.STATES[i])
         _ax.set_xlim([arc2.MIN_VOLTAGE, arc2.MAX_VOLTAGE])
+        _ax.set_xlabel('Voltage')
+        _ax.set_ylabel('Probability Density')
         _probs = np.array([_func(v) for v in _voltage])
         for j in range(arc2.NUM_STATES):
             _ax.plot(_voltage,_probs[:,j],label=f"{arc2.STATES[i]} to {arc2.STATES[j]}")
+            print('\n')
         _ax.legend()
     plt.show()
 
@@ -292,10 +338,11 @@ def main(args):
             plot_hardware_distribution(_arc2_hardware)
         _report = _arc_tester.run(_arc2_hardware)
         _successful_electroform = sum([d['success'] for d in _report])
-        _state_I = sum([d['to state I'] for d in _report])
-        _state_II = sum([d['to state II'] for d in _report])
+       # _state_I = sum([d['to state I'] for d in _report])
+       # _state_II = sum([d['to state II'] for d in _report])
         _failed_devices = sum([d['actual_state']=="FAIL" for d in _report])
         _yield=100*(_successful_electroform/ args.number_devices)
+        
     # _target=[d['target_state'] for d in _report]
     # _current=[d['current_state'] for d in _report]
     # _new=[d['actual_state'] for d in _report]
@@ -323,6 +370,7 @@ def main(args):
     _failed_mean=np.mean(_failed_lists)
     _success_mean= np.mean(_stat_report) 
     _success_std= np.std(_stat_report) 
+    
     print("Devices in wafer: ", args.number_devices)
     print("Devices tested: ", len(_report))
     print('The average successful electroform for ',args.number_wafers,' wafers is','%.2f' % _success_mean,'and', '%.2f' % _success_std ,'std')
