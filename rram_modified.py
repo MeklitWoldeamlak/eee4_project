@@ -9,10 +9,10 @@ import arc2_modified as arc2
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
-DEFAULT_NUMBER_WAFERS = 1
+NUMBER_WAFERS = 10
 DEFAULT_MAX_ATTEMPT =10
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "epsilon"
+DEFAULT_ALGORITHM = "random"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -70,10 +70,14 @@ class Arc2Tester(ABC):
            
             # check to see if we have finished the wafer
             if not hardware.move_to_next_device():
-                if not hardware.move_to_next_wafer():
-                    break
+                #  #hardware.move_to_next_wafer()
+                #  if not hardware.move_to_next_wafer():
+                break
                 
-        self.q_table()
+                    
+                
+                
+        #self.q_table()
         return _report
     
     
@@ -324,17 +328,14 @@ def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
 def main(args):
     
     start = time.time()
-
-    
-    
-    "Use a loop to run number of times representing running your algorithm on many wafers"
     _stat_report=[]
     _yield_lists=[]
     _failed_lists=[]
     _time_list=[]
-    for i in range (args.number_wafers):
-        """Simulate a test module applying voltages to a number of devices in a wafer"""
-        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,args.number_wafers)
+    
+    """Simulate a test module applying voltages to a number of devices in a wafer"""
+    _arc2_hardware = arc2.Arc2HardwareSimulator(number_devices=args.number_devices,number_wafers=2)
+    while True:
         if args.algorithm_to_use == "random":
             _arc_tester = RandomVoltageArc2Tester()
         elif args.algorithm_to_use == "randomwithrange":
@@ -378,6 +379,9 @@ def main(args):
         _yield_lists.append(_yield)
         _failed_lists.append(_failed_devices)
         _time_list.append(sum([d['time_step'] for d in _report])/args.number_devices)
+        if not _arc2_hardware.move_to_next_wafer():
+            break
+                
     _time_mean=np.mean(_time_list)
     _yield_mean=np.mean(_yield_lists) 
     _failed_mean=np.mean(_failed_lists)
@@ -404,19 +408,20 @@ def parser_setup(parser):
         default=DEFAULT_ALGORITHM
     )
     group_input.add_argument(
+        "-w", "--number-wafers",
+        help="Number of memristor wafers.",
+        action="store",
+        type=int,
+        default=11
+    )
+    group_input.add_argument(
         "-n", "--number-devices",
         help="Number of memristor devices in the wafer.",
         action="store",
         type=int,
         default=DEFAULT_NUMBER_DEVICES
     )
-    group_input.add_argument(
-        "-w", "--number-wafers",
-        help="Number of wafer.",
-        action="store",
-        type=int,
-        default= DEFAULT_NUMBER_WAFERS
-    )
+    
     group_input.add_argument(
         "-m", "--max-attempts",
         help="Maxiumum number of time steps to perform on a single device.",
