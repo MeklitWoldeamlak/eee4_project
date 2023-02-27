@@ -12,13 +12,15 @@ A=1.5
 B= 6.5
 FAIL_STD_DISCOUNT= 0.0006
 
-
 # Information about the device that we
 # should not have access to except from
 # observation and behaviour of through
 # experimentation or gained knowledge
-_DEVICE_FAIL_DEVIATION = 1.0
 _TO_FAIL_STATE_TPS_PARAMS ={'max_vol':5,'fail_std':1}
+_DEVICE_FAIL_DEVIATION = 1.0
+
+
+
 _NON_FAIL_STATE_TPS_PARAMS = [
         [
             {'mean': 2.0, 'stdev': 0.75},    # I to II
@@ -74,23 +76,43 @@ def _transition_probability(current_state: int, model_params: list,fail_param:di
 
 
 class Arc2HardwareSimulator:
-    """Models the actual hardware with a variable probability distribution
+    """Models the actual hardware with a fixed probability distribution
     
-    * In this model, the probability distribution vary across devices in the wafer
+    Assumptions:
+        * This model assumes that probability distribution is fixed and does not
+          vary across devices in the wafer and across wafers.
     """
-    def __init__(self,number_wafers:int, number_devices: int):
+    def __init__(self, number_devices: int,number_wafers:int):
         self._number_devices = number_devices
-        self._number_wafers=number_wafers
+        self._number_wafers = number_wafers
+        I_II=random.randrange(15, 30, 1)/10
+        I_III=random.randrange((I_II*10+5), 42, 1)/10
+        II_I=-random.randrange(15, 40, 1)/10
+        II_III=random.randrange(15, 40, 1)/10
+        III_II= -random.randrange(15, 30, 1)/10
+        III_I= -random.randrange(III_II*10+5, 42, 1)/10
         self._fail_pram=_TO_FAIL_STATE_TPS_PARAMS
-        self.mdp_param= _NON_FAIL_STATE_TPS_PARAMS
-        self._vary_constant=0.5
-        self._current_device = 0
-        self._current_wafer = 0
-        self._state_transitions = [_transition_probability(state,params, self._fail_pram)
-                                    for state,params in enumerate(self.mdp_param)]
-        self._state_transitions.append(lambda x: [0.0, 0.0,0.0, 1.0])
-        self._device_state = [random.randrange(NUM_NON_FAIL_STATES) for _ in range(number_devices)]#change to 0 after confirming 
+        self._mdp_param=[
+        [
+            {'mean': I_II, 'stdev': 0.75},    # I to II
+            {'mean': I_III, 'stdev': 0.75}     # I to III
+        ],
+        [
+            {'mean': II_I, 'stdev': 1.0},   # II to I
+            {'mean':  II_III, 'stdev': 1.0}    # II to III
+        ],
+        [
+            {'mean': III_I, 'stdev': 0.75},   # III to I
+            {'mean': III_II, 'stdev': 0.75}    # III to II
+        ]
+    ]
         
+        self._state_transitions = [_transition_probability(state,params, self._fail_pram)
+                                    for state,params in enumerate(self._mdp_param)]
+        self._state_transitions.append(lambda x: [0.0, 0.0, 0.0, 1.0])
+        self._device_state = [random.randrange(NUM_NON_FAIL_STATES) for _ in range(number_devices)]#change to 0 after confirming 
+        self._current_device = 0
+        self._current_wafer=0
 
     def get_current_device_state(self):
         return self._device_state[self._current_device]
@@ -105,33 +127,12 @@ class Arc2HardwareSimulator:
         self._current_device += 1
         self._fail_pram['fail_std']=1-(self._current_device*FAIL_STD_DISCOUNT)
         self._state_transitions = [_transition_probability(state,params, self._fail_pram)
-                                     for state,params in enumerate(self.mdp_param)]
+                                     for state,params in enumerate(self._mdp_param)]
         self._state_transitions.append(lambda x: [0.0, 0.0,0.0, 1.0])
+        if self._current_device==self._number_devices:
+            self._current_wafer+=1
+            
       
         return self._current_device < self._number_devices
-    
-    def tested_wafer(self) -> int:
-        return self._current_wafer  
-    
-    def move_to_next_wafer(self):
-        self._current_device = 0
-        self._current_wafer += 1
-        p = np.random.random()
-        if p < self._vary_constant:
-            for i in range(len(self.mdp_param)):
-                for j in range(len(self.mdp_param[i])):
-                    self.mdp_param[i][j]['mean']+=0.0005 
-                    
-        else:
-            for i in range(len(self.mdp_param)):
-                for j in range(len(self.mdp_param[i])):
-                    self.mdp_param[i][j]['stdev']-=0.0003
-        self._state_transitions = [_transition_probability(state,params, self._fail_pram)
-                                     for state,params in enumerate(self.mdp_param)]
-        self._state_transitions.append(lambda x: [0.0, 0.0,0.0, 1.0])
-        #return self._current_wafer < self._number_wafers
-    
-    
-            
 
 
