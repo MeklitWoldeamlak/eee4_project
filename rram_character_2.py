@@ -339,55 +339,85 @@ def main(args):
         II_III=random.randrange(15, 40, 1)/10
         III_II= -random.randrange(15, 30, 1)/10
         III_I= -random.randrange(III_II*10+5, 42, 1)/10
-        
+        fail_cons=[1.001,1.001,1.001,1.00105,1.0012]
         mdp_param=[[
         [ #original with varying fail_TP
-            {'mean': 2.0, 'stdev': 0.75},    # I to II
-            {'mean': 4.0, 'stdev': 0.75}    # I to III
+            {'mean': 2.0, 'stdev': 0.75,'scale': 1.0},    # I to II
+            {'mean': 4.0, 'stdev': 0.75, 'scale': 1.0}    # I to III
         ],
         [
-            {'mean': -3.0, 'stdev': 1.0},   # II to I
-            {'mean':  3.0, 'stdev': 1.0}    # II to III
+            {'mean': -3.0, 'stdev': 1.0, 'scale': 1.0},   # II to I
+            {'mean':  3.0, 'stdev': 1.0, 'scale': 1.0}    # II to III
             
         ],
         [
-            {'mean': -4.0, 'stdev': 0.75},   # III to I
-            {'mean': -2.0, 'stdev': 0.75}    # III to II
+            {'mean': -4.0, 'stdev': 0.75, 'scale': 1.0},   # III to I
+            {'mean': -2.0, 'stdev': 0.75, 'scale': 1.0}    # III to II
             
         ]
     ],
     [ # MDP with closer mean
         [
-            {'mean': 2.8, 'stdev': 1.0},    # I to II
-            {'mean': 3.0, 'stdev': 1.0}    # I to III
+            {'mean': 2.8, 'stdev': 1.0, 'scale': 1.0},    # I to II
+            {'mean': 3.0, 'stdev': 1.0, 'scale': 1.0}    # I to III
         ],
         [
-            {'mean': -3.2, 'stdev': 1.0},   # II to I
-            {'mean':  3.2, 'stdev': 1.0}    # II to III
+            {'mean': -3.2, 'stdev': 1.0,'scale': 1.0},   # II to I
+            {'mean':  3.2, 'stdev': 1.0, 'scale': 1.0}    # II to III
             ],
         [
-            {'mean': -3.0, 'stdev': 1.0},   # III to I
-            {'mean': -2.8, 'stdev': 1.0}    # III to II  
+            {'mean': -3.0, 'stdev': 1.0, 'scale': 1.0},   # III to I
+            {'mean': -2.8, 'stdev': 1.0, 'scale': 1.0}    # III to II  
         ]
     ],
 
     [ # MDP with different maximum probablity to two state trnsitions 
 
         [
-            {'mean': 2.6, 'stdev': 1},    # I to II
-            {'mean': 3.9, 'stdev': 0.75}     # I to III
+            {'mean': 2.6, 'stdev': 1, 'scale': 1.0},    # I to II
+            {'mean': 3.9, 'stdev': 0.75, 'scale': 1.0}     # I to III
         ],
         [
-            {'mean': -3.2, 'stdev': 1.0},   # II to I
-            {'mean':  3.2, 'stdev': 0.75}    # II to III
+            {'mean': -3.2, 'stdev': 1.0, 'scale': 1.0},   # II to I
+            {'mean':  3.2, 'stdev': 0.75, 'scale': 1.0}    # II to III
         ],
         [
-            {'mean': -3.9, 'stdev': 1},   # III to I
-            {'mean': -2.6, 'stdev': 0.75}    # III to II
+            {'mean': -3.9, 'stdev': 1, 'scale': 1.0},   # III to I
+            {'mean': -2.6, 'stdev': 0.75, 'scale': 1.0}    # III to II
+        ]
+      ],
+      [ # MDP with a scaled version of guassian distribution
+
+        [
+            {'mean': 2.6, 'stdev': 0.65, 'scale': 1.2},    # I to II
+            {'mean': 4.2, 'stdev': 0.65, 'scale': 1.0}     # I to III
+        ],
+        [
+            {'mean': -3.8, 'stdev': 0.75, 'scale': 1.6},   # II to I
+            {'mean':  3.8, 'stdev': 0.75, 'scale': 1.6}    # II to III
+        ],
+        [
+            {'mean': -4.2, 'stdev': 0.65, 'scale': 1.0},   # III to I
+            {'mean': -2.6, 'stdev': 0.65, 'scale': 1.2}    # III to II
+        ]
+      ],
+       [ # MDP encompassing the above characterstics, 
+
+        [
+            {'mean': 2.6, 'stdev': 0.65, 'scale': 1.2},    # I to II
+            {'mean': 4.2, 'stdev': 0.95, 'scale': 1.4}     # I to III
+        ],
+        [
+            {'mean': -4.2, 'stdev': 1, 'scale': 1.8},   # II to I
+            {'mean':  4.2, 'stdev': 1, 'scale': 1.8}    # II to III
+        ],
+        [
+            {'mean': -4.2, 'stdev': 0.95, 'scale': 1.4},   # III to I
+            {'mean': -2.6, 'stdev': 0.65, 'scale': 1.2}    # III to II
         ]
       ]
                    ]
-        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,mdp_param[i], 1.001)
+        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,mdp_param[4], fail_cons[4])
         if args.algorithm_to_use == "random":
             _arc_tester = RandomVoltageArc2Tester()
         elif args.algorithm_to_use == "randomwithrange":
