@@ -5,12 +5,12 @@ import logging
 import random
 from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
-import arc2_modified as arc2
+import arc2_simulator2 as arc2
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
-DEFAULT_NUMBER_WAFERS = 1
-DEFAULT_MAX_ATTEMPT =10
+DEFAULT_NUMBER_WAFERS = 3
+DEFAULT_MAX_ATTEMPT =20
 STEP_VOLTAGES=20
 DEFAULT_ALGORITHM = "epsilon"
 GAMMA = 0.7 #discount factor
@@ -70,10 +70,9 @@ class Arc2Tester(ABC):
            
             # check to see if we have finished the wafer
             if not hardware.move_to_next_device():
-                if not hardware.move_to_next_wafer():
-                    break
+                break
                 
-        self.q_table()
+        #self.q_table()
         return _report
     
     
@@ -334,7 +333,61 @@ def main(args):
     _time_list=[]
     for i in range (args.number_wafers):
         """Simulate a test module applying voltages to a number of devices in a wafer"""
-        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,args.number_wafers)
+        I_II=random.randrange(15, 30, 1)/10
+        I_III=random.randrange((I_II*10+5), 42, 1)/10
+        II_I=-random.randrange(15, 40, 1)/10
+        II_III=random.randrange(15, 40, 1)/10
+        III_II= -random.randrange(15, 30, 1)/10
+        III_I= -random.randrange(III_II*10+5, 42, 1)/10
+        
+        mdp_param=[[
+        [ #original with varying fail_TP
+            {'mean': 2.0, 'stdev': 0.75},    # I to II
+            {'mean': 4.0, 'stdev': 0.75}    # I to III
+        ],
+        [
+            {'mean': -3.0, 'stdev': 1.0},   # II to I
+            {'mean':  3.0, 'stdev': 1.0}    # II to III
+            
+        ],
+        [
+            {'mean': -4.0, 'stdev': 0.75},   # III to I
+            {'mean': -2.0, 'stdev': 0.75}    # III to II
+            
+        ]
+    ],
+    [ # MDP with closer mean
+        [
+            {'mean': 2.8, 'stdev': 1.0},    # I to II
+            {'mean': 3.0, 'stdev': 1.0}    # I to III
+        ],
+        [
+            {'mean': -3.2, 'stdev': 1.0},   # II to I
+            {'mean':  3.2, 'stdev': 1.0}    # II to III
+            ],
+        [
+            {'mean': -3.0, 'stdev': 1.0},   # III to I
+            {'mean': -2.8, 'stdev': 1.0}    # III to II  
+        ]
+    ],
+
+    [ # MDP with different maximum probablity to two state trnsitions 
+
+        [
+            {'mean': 2.6, 'stdev': 1},    # I to II
+            {'mean': 3.9, 'stdev': 0.75}     # I to III
+        ],
+        [
+            {'mean': -3.2, 'stdev': 1.0},   # II to I
+            {'mean':  3.2, 'stdev': 0.75}    # II to III
+        ],
+        [
+            {'mean': -3.9, 'stdev': 1},   # III to I
+            {'mean': -2.6, 'stdev': 0.75}    # III to II
+        ]
+      ]
+                   ]
+        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,mdp_param[i], 1.001)
         if args.algorithm_to_use == "random":
             _arc_tester = RandomVoltageArc2Tester()
         elif args.algorithm_to_use == "randomwithrange":
