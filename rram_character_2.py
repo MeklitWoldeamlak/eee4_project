@@ -9,8 +9,9 @@ import arc2_simulator2 as arc2
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
-DEFAULT_NUMBER_WAFERS = 3
+DEFAULT_NUMBER_WAFERS = 10
 DEFAULT_MAX_ATTEMPT =20
+MODEL_INDEX=5
 STEP_VOLTAGES=20
 DEFAULT_ALGORITHM = "epsilon"
 GAMMA = 0.7 #discount factor
@@ -125,16 +126,45 @@ class ExperiencedUserTester(Arc2Tester):
     A user has determined, having electroformed many devices over the years,
     a good set of voltages to use depending on what we are trying to do
     """
-    def __init__(self):
+    def __init__(self,model:int):
         super().__init__()
+        self.model=model
         self._lookup_voltage_cheat = [
+            [ #MDP #1
             [ 0.0,  2.0, 4.0, 0.0],
             [-3.0,  0.0, 3.0, 0.0],
             [-4.0, -2.0, 0.0, 0.0],
+            [ 0.0,  0.0, 0.0, 0.0]],
+            [#MDP #2
+            [ 0.0,  3.6, 3.8, 0.0],
+            [-3.2,  0.0, 3.2, 0.0],
+            [-3.8, -3.6, 0.0, 0.0],
+            [ 0.0,  0.0, 0.0, 0.0]],
+            
+            [#MDP #3
+            [ 0.0,  2.6, 3.9, 0.0],
+            [-3.2,  0.0, 3.2, 0.0],
+            [-3.8, -2.6, 0.0, 0.0],
+            [ 0.0,  0.0, 0.0, 0.0]],
+            [#MDP #4
+            [ 0.0,  2.6, 4.2, 0.0],
+            [-3.8,  0.0, 3.8, 0.0],
+            [-4.2, -2.6, 0.0, 0.0],
+            [ 0.0,  0.0, 0.0, 0.0]],
+            [#MDP #5
+            [ 0.0,  2.6, 4.2, 0.0],
+            [-4.2,  0.0, 4.2, 0.0],
+            [-4.2, -2.6, 0.0, 0.0],
+            [ 0.0,  0.0, 0.0, 0.0]],
+            [#MDP #6
+            [ 0.0,  2.6, 4.2, 0.0],
+            [-3.7,  0.0, 4.2, 0.0],
+            [-4.2, -2.6, 0.0, 0.0],
             [ 0.0,  0.0, 0.0, 0.0]]
+            ]
 
     def get_action(self, current_state, target_state) -> dict:
-        return {'voltage': self._lookup_voltage_cheat[current_state][target_state],
+        return {'voltage': self._lookup_voltage_cheat[self.model][current_state][target_state],
                 'pulse_duration':1}
 
 
@@ -225,77 +255,7 @@ class EpsilonGreedyTester(Arc2Tester):
         print('Final epsilon=', self._epsilon)
         print(Q)
         print(_mean_voltage)          
-class QLearn(Arc2Tester):
-     
-    def __init__(self,voltage_step, learning_rate=ALPHA, discount=GAMMA, exploration_rate=1.0):
-        self.learning_rate = learning_rate
-        self.discount = discount # How much we appreciate future reward over current
-        self.exploration_rate = exploration_rate # Initial exploration rate
-        #self.exploration_delta = 1.0 / iterations # Shift from exploration to explotation  
-        #self.iterations =iterations
-        self._voltage_inc=(arc2.MAX_VOLTAGE - arc2.MIN_VOLTAGE)/float(voltage_step) #float voltage increment (0.5)
-        self._voltage_step= voltage_step+1 # total number of actions(20)
-        self._voltages= [arc2.MIN_VOLTAGE+i*self._voltage_inc for i in range(self._voltage_step)] #actual value of volatges
-        self._expected_Q_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
-                                                arc2.NUM_NON_FAIL_STATES,
-                                                self._voltage_step))   
-        self._exploration=0
-        self._exploitation=0
-        
-        
-    def get_action(self, current_state, target_state) -> dict: 
-         
-         #for i in range(self.iterations):
-        _actions= self._voltages
-        #for i in range(args.max_attempts):
-             
-        p = np.random.random()
-        if p < self.exploration_rate:
-            self._exploration += 1
-            _voltage_index = np.random.choice(self._voltage_step)
-            _voltage=self._voltages[_voltage_index]
-        else:
-            self._exploitation+= 1
-            _voltage_index = np.argmax([a for a in self._expected_Q_table[current_state][target_state]])
-            _voltage=self._voltages[_voltage_index]
-            
-        return {'voltage': _voltage,
-                'pulse_duration':1,
-                'voltage_index':_voltage_index
-        }
-           
-    def update(self,old_state:int, target_state:int, action:dict, new_state:int) :
-        if new_state==target_state :
-            reward=10
-        elif new_state==3 :#fail
-            reward=-20
-        else:
-            reward=1
-       # _index= int(action['voltage']/self._voltage_inc)
-        _index= action['voltage_index']
-        # Ask the model for the Q values of the old state (inference)
-        old_state_Q_values = self._expected_Q_table[old_state][target_state]
-        if new_state==3:
-            new_state_Q_values=np.zeros([20])
-        else:
-            new_state_Q_values = self._expected_Q_table[new_state][target_state]
-        
-        old_state_Q_values[_index]= reward+ self.discount * np.amax(new_state_Q_values)
-        # Compute the temporal difference
-        # The action here exactly refers to going to the next state
-        TD= reward+ self.discount*np.amax(new_state_Q_values)- old_state_Q_values[_index]
-        # Update the Q-Value using the Bellman equation
-        self._expected_Q_table[old_state][target_state][_index] += self.learning_rate * TD 
-        #favour exploitation a little bit more 
-        self.exploration_rate *= 0.999 
-         
-    def q_table(self):
-        Q=self._expected_Q_table[-1]
-        print(self._exploration) 
-        print(self._exploitation) 
-        print(self.exploration_rate)
-        print(Q)
-               
+
          
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
     """Plot the hardware distribution for each state"""
@@ -339,7 +299,7 @@ def main(args):
         II_III=random.randrange(15, 40, 1)/10
         III_II= -random.randrange(15, 30, 1)/10
         III_I= -random.randrange(III_II*10+5, 42, 1)/10
-        fail_cons=[1.001,1.001,1.001,1.00105,1.0012]
+        fail_cons=[1.001,1.0013,1.001,1.00105,1.0012,1.0012]
         mdp_param=[[
         [ #original with varying fail_TP
             {'mean': 2.0, 'stdev': 0.75,'scale': 1.0},    # I to II
@@ -358,16 +318,16 @@ def main(args):
     ],
     [ # MDP with closer mean
         [
-            {'mean': 2.8, 'stdev': 1.0, 'scale': 1.0},    # I to II
-            {'mean': 3.0, 'stdev': 1.0, 'scale': 1.0}    # I to III
+            {'mean': 3.6, 'stdev': 1.0, 'scale': 1.0},    # I to II
+            {'mean': 3.8, 'stdev': 1.0, 'scale': 1.0}    # I to III
         ],
         [
             {'mean': -3.2, 'stdev': 1.0,'scale': 1.0},   # II to I
             {'mean':  3.2, 'stdev': 1.0, 'scale': 1.0}    # II to III
             ],
         [
-            {'mean': -3.0, 'stdev': 1.0, 'scale': 1.0},   # III to I
-            {'mean': -2.8, 'stdev': 1.0, 'scale': 1.0}    # III to II  
+            {'mean': -3.8, 'stdev': 1.0, 'scale': 1.0},   # III to I
+            {'mean': -3.6, 'stdev': 1.0, 'scale': 1.0}    # III to II  
         ]
     ],
 
@@ -415,15 +375,30 @@ def main(args):
             {'mean': -4.2, 'stdev': 0.95, 'scale': 1.4},   # III to I
             {'mean': -2.6, 'stdev': 0.65, 'scale': 1.2}    # III to II
         ]
+      ],
+       [ # MDP with unsymmetrical curve when going to state I and III from state II, 
+
+        [
+            {'mean': 2.6, 'stdev': 0.65, 'scale': 1.2},    # I to II
+            {'mean': 4.2, 'stdev': 0.95, 'scale': 1.6}     # I to III
+        ],
+        [
+            {'mean': -3.7, 'stdev': 1, 'scale': 2},   # II to I
+            {'mean':  4.2, 'stdev': 1, 'scale': 1.8}    # II to III
+        ],
+        [
+            {'mean': -4.2, 'stdev': 0.95, 'scale': 1.6},   # III to I
+            {'mean': -2.6, 'stdev': 0.65, 'scale': 1.2}    # III to II
+        ]
       ]
                    ]
-        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,mdp_param[4], fail_cons[4])
+        _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,mdp_param[MODEL_INDEX], fail_cons[MODEL_INDEX])
         if args.algorithm_to_use == "random":
             _arc_tester = RandomVoltageArc2Tester()
         elif args.algorithm_to_use == "randomwithrange":
             _arc_tester = RandomVoltageWithRangeKnowledgeArc2Tester()
         elif args.algorithm_to_use == "expuser":
-            _arc_tester = ExperiencedUserTester()
+            _arc_tester = ExperiencedUserTester(MODEL_INDEX)
         elif args.algorithm_to_use == "epsilon":
             _arc_tester = EpsilonGreedyTester(args.max_attempts,STEP_VOLTAGES, GAMMA)
         elif args.algorithm_to_use == "qlearn":
