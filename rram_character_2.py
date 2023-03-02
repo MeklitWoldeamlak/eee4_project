@@ -1,4 +1,5 @@
 import numpy as np
+import json
 import time
 import argparse
 import logging
@@ -11,9 +12,9 @@ SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 10
 DEFAULT_MAX_ATTEMPT =20
-MODEL_INDEX=5
+MODEL_INDEX=0
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "epsilon"
+DEFAULT_ALGORITHM = "expuser"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -129,42 +130,19 @@ class ExperiencedUserTester(Arc2Tester):
     def __init__(self,model:int):
         super().__init__()
         self.model=model
-        self._lookup_voltage_cheat = [
-            [ #MDP #1
-            [ 0.0,  2.0, 4.0, 0.0],
-            [-3.0,  0.0, 3.0, 0.0],
-            [-4.0, -2.0, 0.0, 0.0],
-            [ 0.0,  0.0, 0.0, 0.0]],
-            [#MDP #2
-            [ 0.0,  3.6, 3.8, 0.0],
-            [-3.2,  0.0, 3.2, 0.0],
-            [-3.8, -3.6, 0.0, 0.0],
-            [ 0.0,  0.0, 0.0, 0.0]],
+        self.lookup_matrix=np.zeros((arc2.NUM_STATES,arc2.NUM_STATES))
+        with open("mdp_param.json") as f:
+            mdp_param = json.load(f)
+        model_param=mdp_param[self.model]
+        self.lookup_matrix[0][1]=model_param[0][0]['mean']
+        self.lookup_matrix[0][2]=model_param[0][1]['mean']
+        self.lookup_matrix[1][0]=model_param[1][0]['mean']
+        self.lookup_matrix[1][2]=model_param[1][1]['mean']
+        self.lookup_matrix[2][0]=model_param[2][0]['mean']
+        self.lookup_matrix[2][1]=model_param[2][1]['mean']
             
-            [#MDP #3
-            [ 0.0,  2.6, 3.9, 0.0],
-            [-3.2,  0.0, 3.2, 0.0],
-            [-3.8, -2.6, 0.0, 0.0],
-            [ 0.0,  0.0, 0.0, 0.0]],
-            [#MDP #4
-            [ 0.0,  2.6, 4.2, 0.0],
-            [-3.8,  0.0, 3.8, 0.0],
-            [-4.2, -2.6, 0.0, 0.0],
-            [ 0.0,  0.0, 0.0, 0.0]],
-            [#MDP #5
-            [ 0.0,  2.6, 4.2, 0.0],
-            [-4.2,  0.0, 4.2, 0.0],
-            [-4.2, -2.6, 0.0, 0.0],
-            [ 0.0,  0.0, 0.0, 0.0]],
-            [#MDP #6
-            [ 0.0,  2.6, 4.2, 0.0],
-            [-3.7,  0.0, 4.2, 0.0],
-            [-4.2, -2.6, 0.0, 0.0],
-            [ 0.0,  0.0, 0.0, 0.0]]
-            ]
-
     def get_action(self, current_state, target_state) -> dict:
-        return {'voltage': self._lookup_voltage_cheat[self.model][current_state][target_state],
+        return {'voltage': self.lookup_matrix[current_state][target_state],
                 'pulse_duration':1}
 
 
@@ -234,10 +212,6 @@ class EpsilonGreedyTester(Arc2Tester):
             self._expected_reward_table[old_state][target_state][_index]+=-20
         else:
             self._expected_reward_table[old_state][target_state][_index]+=1
-            
-            
-       ## self._action_value_est = (1 - 1.0 / self._exploration)*self._action_value_est + 1.0 / self._exploration * action['voltage']
-        ## self._expected_reward_table[old_state][new_state][_voltage_index]=self._action_value_est
         
         #favour exploitation a little bit more   
         self._epsilon *= 0.999
@@ -256,6 +230,109 @@ class EpsilonGreedyTester(Arc2Tester):
         print(Q)
         print(_mean_voltage)          
 
+class ExperiencedUserTester(Arc2Tester):
+    """Second attempt - a knowledge user has determined a good set of values
+    
+    A user has determined, having electroformed many devices over the years,
+    a good set of voltages to use depending on what we are trying to do
+    """
+    def __init__(self,model:int):
+        super().__init__()
+        self.model=model
+        self.lookup_matrix=np.zeros((arc2.NUM_STATES,arc2.NUM_STATES))
+        with open("mdp_param.json") as f:
+            mdp_param = json.load(f)
+        model_param=mdp_param[self.model]
+        self.lookup_matrix[0][1]=model_param[0][0]['mean']
+        self.lookup_matrix[0][2]=model_param[0][1]['mean']
+        self.lookup_matrix[1][0]=model_param[1][0]['mean']
+        self.lookup_matrix[1][2]=model_param[1][1]['mean']
+        self.lookup_matrix[2][0]=model_param[2][0]['mean']
+        self.lookup_matrix[2][1]=model_param[2][1]['mean']
+            
+    def get_action(self, current_state, target_state) -> dict:
+        return {'voltage': self.lookup_matrix[current_state][target_state],
+                'pulse_duration':1}
+
+
+class EpsilonGreedyCautious(Arc2Tester):
+    """Update of EpsilonGreedy with a bit more caution made 
+    by starting from lower voltages first and then progressing to higher 
+    voltages as we explore
+    """
+    def __init__(self, max_attempts:int,voltage_step:int, gamma:float):
+        super().__init__()
+        self._voltage_inc=(arc2.MAX_VOLTAGE - arc2.MIN_VOLTAGE)/float(voltage_step) #float voltage increment (0.5)
+        self._voltage_step= voltage_step+1 # total number of actions(20)
+        self._voltages= [arc2.MIN_VOLTAGE+i*self._voltage_inc for i in range(self._voltage_step)] #actual value of volatges
+        self._expected_reward_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
+                                                arc2.NUM_NON_FAIL_STATES,
+                                                self._voltage_step))
+        self._epsilon = 1
+        self._gamma= gamma
+        self._exploitation = 0
+        self._exploration = 0
+        self._action_value_est= 0
+        
+    def get_action(self, current_state, target_state) -> dict:
+        
+        _actions= self._voltages
+        #for i in range(args.max_attempts):
+             
+        p = np.random.random()
+        if p < self._epsilon:
+            self._exploration += 1
+            if current_state == 0:
+                _voltage_index = random.randrange((self._voltage_step-1)/2,self._voltage_step)
+            elif current_state == 1 and target_state ==0:
+                _voltage_index= random.randrange(0,(self._voltage_step-1)/2)
+            elif current_state == 1 and target_state ==2:
+                _voltage_index= random.randrange((self._voltage_step-1)/2,self._voltage_step)
+            elif current_state == 2:
+                _voltage_index= random.randrange(0,(self._voltage_step-1)/2)
+            _voltage=self._voltages[_voltage_index] 
+            #_voltage_index = np.random.choice(self._voltage_step)
+            #_voltage=self._voltages[_voltage_index]
+        else:
+            self._exploitation+= 1
+            _voltage_index = np.argmax([a for a in self._expected_reward_table[current_state][target_state]])
+            _voltage=self._voltages[_voltage_index]       
+        
+        return {'voltage': _voltage,
+                'pulse_duration':1,
+                'voltage_index':_voltage_index
+        }     
+        
+    def update(self, old_state:int, target_state:int, action:dict, new_state:int ):
+        """update the expected reward table
+        add 1 to self_exploration every time we explore(take single action)
+        """
+        
+       # _index= int(action['voltage']/self._voltage_inc)
+        _index= action['voltage_index']
+        if new_state==target_state :
+            self._expected_reward_table[old_state][target_state][_index]+=10
+        elif new_state==3 :#fail
+            self._expected_reward_table[old_state][target_state][_index]+=-20
+        else:
+            self._expected_reward_table[old_state][target_state][_index]+=1
+        
+        #favour exploitation a little bit more   
+        self._epsilon *= 0.999
+    def q_table(self):
+        Q=self._expected_reward_table
+        _mean_voltage=np.zeros((arc2.NUM_NON_FAIL_STATES,arc2.NUM_NON_FAIL_STATES))
+        for i in range(arc2.NUM_NON_FAIL_STATES):
+            for j in range(arc2.NUM_NON_FAIL_STATES):
+                _mean_v_index = np.argmax([a for a in Q[i][j]])
+                _mean_voltage[i,j]=self._voltages[_mean_v_index]
+                if i==j:
+                    _mean_voltage[i,j]=0        
+        print('Number of exploration=', self._exploration) 
+        print('Number of exploitation=', self._exploitation) 
+        print('Final epsilon=', self._epsilon)
+        print(Q)
+        print(_mean_voltage)  
          
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
     """Plot the hardware distribution for each state"""
@@ -284,8 +361,6 @@ def main(args):
     
     start = time.time()
 
-    
-    
     "Use a loop to run number of times representing running your algorithm on many wafers"
     _stat_report=[]
     _yield_lists=[]
@@ -293,105 +368,9 @@ def main(args):
     _time_list=[]
     for i in range (args.number_wafers):
         """Simulate a test module applying voltages to a number of devices in a wafer"""
-        I_II=random.randrange(15, 30, 1)/10
-        I_III=random.randrange((I_II*10+5), 42, 1)/10
-        II_I=-random.randrange(15, 40, 1)/10
-        II_III=random.randrange(15, 40, 1)/10
-        III_II= -random.randrange(15, 30, 1)/10
-        III_I= -random.randrange(III_II*10+5, 42, 1)/10
         fail_cons=[1.001,1.0013,1.001,1.00105,1.0012,1.0012]
-        mdp_param=[[
-        [ #original with varying fail_TP
-            {'mean': 2.0, 'stdev': 0.75,'scale': 1.0},    # I to II
-            {'mean': 4.0, 'stdev': 0.75, 'scale': 1.0}    # I to III
-        ],
-        [
-            {'mean': -3.0, 'stdev': 1.0, 'scale': 1.0},   # II to I
-            {'mean':  3.0, 'stdev': 1.0, 'scale': 1.0}    # II to III
-            
-        ],
-        [
-            {'mean': -4.0, 'stdev': 0.75, 'scale': 1.0},   # III to I
-            {'mean': -2.0, 'stdev': 0.75, 'scale': 1.0}    # III to II
-            
-        ]
-    ],
-    [ # MDP with closer mean
-        [
-            {'mean': 3.6, 'stdev': 1.0, 'scale': 1.0},    # I to II
-            {'mean': 3.8, 'stdev': 1.0, 'scale': 1.0}    # I to III
-        ],
-        [
-            {'mean': -3.2, 'stdev': 1.0,'scale': 1.0},   # II to I
-            {'mean':  3.2, 'stdev': 1.0, 'scale': 1.0}    # II to III
-            ],
-        [
-            {'mean': -3.8, 'stdev': 1.0, 'scale': 1.0},   # III to I
-            {'mean': -3.6, 'stdev': 1.0, 'scale': 1.0}    # III to II  
-        ]
-    ],
-
-    [ # MDP with different maximum probablity to two state trnsitions 
-
-        [
-            {'mean': 2.6, 'stdev': 1, 'scale': 1.0},    # I to II
-            {'mean': 3.9, 'stdev': 0.75, 'scale': 1.0}     # I to III
-        ],
-        [
-            {'mean': -3.2, 'stdev': 1.0, 'scale': 1.0},   # II to I
-            {'mean':  3.2, 'stdev': 0.75, 'scale': 1.0}    # II to III
-        ],
-        [
-            {'mean': -3.9, 'stdev': 1, 'scale': 1.0},   # III to I
-            {'mean': -2.6, 'stdev': 0.75, 'scale': 1.0}    # III to II
-        ]
-      ],
-      [ # MDP with a scaled version of guassian distribution
-
-        [
-            {'mean': 2.6, 'stdev': 0.65, 'scale': 1.2},    # I to II
-            {'mean': 4.2, 'stdev': 0.65, 'scale': 1.0}     # I to III
-        ],
-        [
-            {'mean': -3.8, 'stdev': 0.75, 'scale': 1.6},   # II to I
-            {'mean':  3.8, 'stdev': 0.75, 'scale': 1.6}    # II to III
-        ],
-        [
-            {'mean': -4.2, 'stdev': 0.65, 'scale': 1.0},   # III to I
-            {'mean': -2.6, 'stdev': 0.65, 'scale': 1.2}    # III to II
-        ]
-      ],
-       [ # MDP encompassing the above characterstics, 
-
-        [
-            {'mean': 2.6, 'stdev': 0.65, 'scale': 1.2},    # I to II
-            {'mean': 4.2, 'stdev': 0.95, 'scale': 1.4}     # I to III
-        ],
-        [
-            {'mean': -4.2, 'stdev': 1, 'scale': 1.8},   # II to I
-            {'mean':  4.2, 'stdev': 1, 'scale': 1.8}    # II to III
-        ],
-        [
-            {'mean': -4.2, 'stdev': 0.95, 'scale': 1.4},   # III to I
-            {'mean': -2.6, 'stdev': 0.65, 'scale': 1.2}    # III to II
-        ]
-      ],
-       [ # MDP with unsymmetrical curve when going to state I and III from state II, 
-
-        [
-            {'mean': 2.6, 'stdev': 0.65, 'scale': 1.2},    # I to II
-            {'mean': 4.2, 'stdev': 0.95, 'scale': 1.6}     # I to III
-        ],
-        [
-            {'mean': -3.7, 'stdev': 1, 'scale': 2},   # II to I
-            {'mean':  4.2, 'stdev': 1, 'scale': 1.8}    # II to III
-        ],
-        [
-            {'mean': -4.2, 'stdev': 0.95, 'scale': 1.6},   # III to I
-            {'mean': -2.6, 'stdev': 0.65, 'scale': 1.2}    # III to II
-        ]
-      ]
-                   ]
+        with open("mdp_param.json") as f:
+            mdp_param = json.load(f)
         _arc2_hardware = arc2.Arc2HardwareSimulator(args.number_devices,mdp_param[MODEL_INDEX], fail_cons[MODEL_INDEX])
         if args.algorithm_to_use == "random":
             _arc_tester = RandomVoltageArc2Tester()
@@ -414,9 +393,6 @@ def main(args):
         _failed_devices = sum([d['actual_state']=="FAIL" for d in _report])
         _yield=100*(_successful_electroform/ args.number_devices)
         
-    # _target=[d['target_state'] for d in _report]
-    # _current=[d['current_state'] for d in _report]
-    # _new=[d['actual_state'] for d in _report]
         
         if args.additional_info:
             print("Num of devices in state I : ", _state_I)
@@ -426,11 +402,6 @@ def main(args):
             print("The First Pass Yield(FPY) in wafer number  ",i+1,'is',_yield ,'% \n')
         
        
-        #print("State of Devices : ", _current)
-        #print(" New State of Devices : ", _new)
-        #print("Voltage : ", [d['voltage_applied'] for d in _report])
-        #table= [d['table'] for d in _report]
-        #print(table[-1])
         
         _stat_report.append(_successful_electroform)
         _yield_lists.append(_yield)
