@@ -77,8 +77,6 @@ class Arc2Tester(ABC):
         #self.q_table()
         return _report
     
-    
-
     @abstractmethod
     def get_action(self, current_state, target_state) -> dict:
         raise NotImplementedError("Must override get_action")
@@ -262,6 +260,7 @@ class EpsilonGreedyCautious(Arc2Tester):
     """
     def __init__(self, max_attempts:int,voltage_step:int, gamma:float):
         super().__init__()
+        self.range_subtractor=4
         self._voltage_inc=(arc2.MAX_VOLTAGE - arc2.MIN_VOLTAGE)/float(voltage_step) #float voltage increment (0.5)
         self._voltage_step= voltage_step+1 # total number of actions(20)
         self._voltages= [arc2.MIN_VOLTAGE+i*self._voltage_inc for i in range(self._voltage_step)] #actual value of volatges
@@ -283,16 +282,14 @@ class EpsilonGreedyCautious(Arc2Tester):
         if p < self._epsilon:
             self._exploration += 1
             if current_state == 0:
-                _voltage_index = random.randrange((self._voltage_step-1)/2,self._voltage_step)
+                _voltage_index = random.randrange((self._voltage_step-1)/2,self._voltage_step-self.range_subtractor)
             elif current_state == 1 and target_state ==0:
-                _voltage_index= random.randrange(0,(self._voltage_step-1)/2)
+                _voltage_index= random.randrange(0+self.range_subtractor,(self._voltage_step-1)/2)
             elif current_state == 1 and target_state ==2:
-                _voltage_index= random.randrange((self._voltage_step-1)/2,self._voltage_step)
+                _voltage_index= random.randrange((self._voltage_step-1)/2,self._voltage_step-self.range_subtractor)
             elif current_state == 2:
-                _voltage_index= random.randrange(0,(self._voltage_step-1)/2)
+                _voltage_index= random.randrange(0+self.range_subtractor,(self._voltage_step-1)/2)
             _voltage=self._voltages[_voltage_index] 
-            #_voltage_index = np.random.choice(self._voltage_step)
-            #_voltage=self._voltages[_voltage_index]
         else:
             self._exploitation+= 1
             _voltage_index = np.argmax([a for a in self._expected_reward_table[current_state][target_state]])
@@ -319,6 +316,10 @@ class EpsilonGreedyCautious(Arc2Tester):
         
         #favour exploitation a little bit more   
         self._epsilon *= 0.999
+        if  self._epsilon < 0.8 and self._epsilon > 0.6:
+            self.range_subtractor=2
+        elif  self._epsilon < 0.6:
+            self.range_subtractor=0
     def q_table(self):
         Q=self._expected_reward_table
         _mean_voltage=np.zeros((arc2.NUM_NON_FAIL_STATES,arc2.NUM_NON_FAIL_STATES))
@@ -380,8 +381,8 @@ def main(args):
             _arc_tester = ExperiencedUserTester(MODEL_INDEX)
         elif args.algorithm_to_use == "epsilon":
             _arc_tester = EpsilonGreedyTester(args.max_attempts,STEP_VOLTAGES, GAMMA)
-        elif args.algorithm_to_use == "qlearn":
-            _arc_tester = QLearn(voltage_step=STEP_VOLTAGES)
+        elif args.algorithm_to_use == "epsilon_c":
+            _arc_tester = EpsilonGreedyCautious(args.max_attempts,STEP_VOLTAGES, GAMMA)
         else:
             raise RuntimeError("Unknown algorithm!")
         _report = _arc_tester.run(_arc2_hardware)
@@ -400,8 +401,6 @@ def main(args):
             print("Successful electroform in wafer number ",i+1,'is' ,_successful_electroform)
             print("Failed devices in wafer number ",i+1,'is', _failed_devices)
             print("The First Pass Yield(FPY) in wafer number  ",i+1,'is',_yield ,'% \n')
-        
-       
         
         _stat_report.append(_successful_electroform)
         _yield_lists.append(_yield)
