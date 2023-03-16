@@ -44,7 +44,7 @@ def _transition_probability(current_state: int, model_params: list, fail_tp_mult
     #prob=1.2
     #if current_state==1:
       #  prob=1.5
-    _prob_functions = [_normal_dist(1,params['mean'],params['stdev']) for params in model_params]
+    _prob_functions = [_normal_dist(params['scale'],params['mean'],params['stdev']) for params in model_params]
     _prob_functions.append(_symmetic_normal_dist(fail_tp_multiplier*0.5,MAX_VOLTAGE,_DEVICE_FAIL_DEVIATION))
     def _transition(voltage) -> np.array:
         _probabilities = np.array([f(voltage) for f in _prob_functions])

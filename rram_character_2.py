@@ -10,11 +10,11 @@ import arc2_simulator2 as arc2
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
-DEFAULT_NUMBER_WAFERS = 10
+DEFAULT_NUMBER_WAFERS = 1
 DEFAULT_MAX_ATTEMPT =20
 MODEL_INDEX=0
 STEP_VOLTAGES=20
-DEFAULT_ALGORITHM = "expuser"
+DEFAULT_ALGORITHM = "epsilon_c"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
@@ -74,7 +74,7 @@ class Arc2Tester(ABC):
             if not hardware.move_to_next_device():
                 break
                 
-        #self.q_table()
+        self.q_table()
         return _report
     
     @abstractmethod
@@ -227,32 +227,6 @@ class EpsilonGreedyTester(Arc2Tester):
         print('Final epsilon=', self._epsilon)
         print(Q)
         print(_mean_voltage)          
-
-class ExperiencedUserTester(Arc2Tester):
-    """Second attempt - a knowledge user has determined a good set of values
-    
-    A user has determined, having electroformed many devices over the years,
-    a good set of voltages to use depending on what we are trying to do
-    """
-    def __init__(self,model:int):
-        super().__init__()
-        self.model=model
-        self.lookup_matrix=np.zeros((arc2.NUM_STATES,arc2.NUM_STATES))
-        with open("mdp_param.json") as f:
-            mdp_param = json.load(f)
-        model_param=mdp_param[self.model]
-        self.lookup_matrix[0][1]=model_param[0][0]['mean']
-        self.lookup_matrix[0][2]=model_param[0][1]['mean']
-        self.lookup_matrix[1][0]=model_param[1][0]['mean']
-        self.lookup_matrix[1][2]=model_param[1][1]['mean']
-        self.lookup_matrix[2][0]=model_param[2][0]['mean']
-        self.lookup_matrix[2][1]=model_param[2][1]['mean']
-            
-    def get_action(self, current_state, target_state) -> dict:
-        return {'voltage': self.lookup_matrix[current_state][target_state],
-                'pulse_duration':1}
-
-
 class EpsilonGreedyCautious(Arc2Tester):
     """Update of EpsilonGreedy with a bit more caution made 
     by starting from lower voltages first and then progressing to higher 
@@ -355,8 +329,6 @@ def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
             print('\n')
         _ax.legend()
     plt.show()
-
-
 
 def main(args):
     
