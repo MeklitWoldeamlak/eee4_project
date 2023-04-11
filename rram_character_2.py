@@ -7,11 +7,14 @@ import random
 from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
 import arc2_simulator2 as arc2
+from numpy import asarray
+from numpy import savetxt
+import numpy as gfg
 
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 1
-DEFAULT_MAX_ATTEMPT =20
+DEFAULT_MAX_ATTEMPT =2
 MODEL_INDEX=0
 STEP_VOLTAGES=20
 DEFAULT_ALGORITHM = "epsilon_c"
@@ -23,6 +26,9 @@ class Arc2Tester(ABC):
     
     def run(self,hardware: arc2.Arc2HardwareSimulator) -> list:
         """Run test on hardware"""
+        a=np.zeros((arc2.NUM_NON_FAIL_STATES, arc2.NUM_NON_FAIL_STATES,121))
+        np.savetxt('data1.csv', a.flatten(), delimiter=',')
+        
         _report = []
         _time_record=[]
        # _transition_record= np.array(np.zeros([3,4,20]))
@@ -241,6 +247,7 @@ class EpsilonGreedyCautious(Arc2Tester):
         self._expected_reward_table = np.zeros((arc2.NUM_NON_FAIL_STATES,
                                                 arc2.NUM_NON_FAIL_STATES,
                                                 self._voltage_step))
+       
         self._epsilon = 1
         self._gamma= gamma
         self._exploitation = 0
@@ -302,11 +309,25 @@ class EpsilonGreedyCautious(Arc2Tester):
                 _mean_v_index = np.argmax([a for a in Q[i][j]])
                 _mean_voltage[i,j]=self._voltages[_mean_v_index]
                 if i==j:
-                    _mean_voltage[i,j]=0        
+                    _mean_voltage[i,j]=0  
+         
+        # save to csv file
+        # np.savetxt('data.csv', Q.flatten(), delimiter=',')
+        # loaded_array = np.loadtxt('data.csv')
+        # loaded_matrix_3d = np.reshape(loaded_array, ((arc2.NUM_NON_FAIL_STATES,
+        #                                         arc2.NUM_NON_FAIL_STATES,
+        #                                         self._voltage_step)))
+        # with open('data.csv', 'a') as f_out:
+        #     f_out.write(Q[1])
+        
+        # with open('outfile.txt','wb') as f:
+        #     for line in Q:
+        #         np.savetxt(f, line, fmt='%.2f')
         print('Number of exploration=', self._exploration) 
         print('Number of exploitation=', self._exploitation) 
         print('Final epsilon=', self._epsilon)
         print(Q)
+        print(loaded_matrix_3d)
         print(_mean_voltage)  
          
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
