@@ -10,25 +10,23 @@ import arc2_simulator2 as arc2
 from numpy import asarray
 from numpy import savetxt
 import numpy as gfg
-
+from collections import Counter
+import pandas as pd
+        
 SAMPLE_VOLTAGE_IN_MV = 5
 DEFAULT_NUMBER_DEVICES = 1000
 DEFAULT_NUMBER_WAFERS = 1
-DEFAULT_MAX_ATTEMPT =2
-MODEL_INDEX=0
-STEP_VOLTAGES=20
+DEFAULT_MAX_ATTEMPT =20
+MODEL_INDEX=5
+STEP_VOLTAGES=50
 DEFAULT_ALGORITHM = "epsilon_c"
 GAMMA = 0.7 #discount factor
 ALPHA = 0.9 #learning factor
 
 class Arc2Tester(ABC):
     """This is the deliverable"""
-    
     def run(self,hardware: arc2.Arc2HardwareSimulator) -> list:
-        """Run test on hardware"""
-        a=np.zeros((arc2.NUM_NON_FAIL_STATES, arc2.NUM_NON_FAIL_STATES,121))
-        np.savetxt('data1.csv', a.flatten(), delimiter=',')
-        
+        """Run test on hardware"""  
         _report = []
         _time_record=[]
        # _transition_record= np.array(np.zeros([3,4,20]))
@@ -81,6 +79,17 @@ class Arc2Tester(ABC):
                 break
                 
         self.q_table()
+        
+        # fig, ax = plt.subplots()
+        # x=["{:.1f}".format(d['voltage_applied']) for d in _report]
+        # count = Counter(sorted(x))
+        # df = pd.DataFrame.from_dict(count, orient='index')
+        # df.plot(ax=ax,kind='bar')
+        # ax.set_ylabel('Frequency')
+        # ax.set_xlabel('Voltage')
+        # ax.legend(labels=['Epsilon greedy'])
+        # plt.show()
+        # print(sorted(x))
         return _report
     
     @abstractmethod
@@ -218,7 +227,7 @@ class EpsilonGreedyTester(Arc2Tester):
             self._expected_reward_table[old_state][target_state][_index]+=1
         
         #favour exploitation a little bit more   
-        self._epsilon *= 0.999
+        self._epsilon *= 0.9999
     def q_table(self):
         Q=self._expected_reward_table
         _mean_voltage=np.zeros((arc2.NUM_NON_FAIL_STATES,arc2.NUM_NON_FAIL_STATES))
@@ -327,7 +336,6 @@ class EpsilonGreedyCautious(Arc2Tester):
         print('Number of exploitation=', self._exploitation) 
         print('Final epsilon=', self._epsilon)
         print(Q)
-        print(loaded_matrix_3d)
         print(_mean_voltage)  
          
 def plot_hardware_distribution(hardware: arc2.Arc2HardwareSimulator):
